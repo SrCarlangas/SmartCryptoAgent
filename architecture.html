@@ -1,0 +1,92 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CryptoBot Architecture</title>
+    <style>
+        body { font-family: sans-serif; max-width: 800px; margin: 40px auto; line-height: 1.6; padding: 20px; }
+        pre { background: #f4f4f4; padding: 10px; border-radius: 5px; }
+        code { font-family: monospace; }
+        .mermaid { text-align: center; margin: 20px 0; }
+        h1, h2, h3 { color: #333; }
+        blockquote { border-left: 4px solid #ddd; padding-left: 10px; color: #666; }
+    </style>
+    <script type="module">
+        import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.esm.min.mjs';
+        mermaid.initialize({ startOnLoad: true });
+    </script>
+</head>
+<body>
+<h1>Architecture & Flow</h1>
+<br>
+<h2>Sequence Diagram</h2>
+<p>This diagram illustrates the main execution loop of the Crypto Trading Bot.</p>
+<br>
+<div class="mermaid">
+sequenceDiagram
+participant Main as Main Loop
+participant API as BinanceConnector
+participant Risk as RiskManager
+participant News as NewsAnalyzer
+participant Strat as EstrategiaConfluencia
+participant Stop as TrailingStopATR
+
+Note over Main: Infinite Loop (15s interval)
+
+Main->>API: obtener_precio(BTC/USDT)
+Main->>API: obtener_velas(15m)
+
+rect rgb(20, 20, 20)
+Note right of Main: Daily Balance Check
+Main->>API: obtener_balance_total()
+Main->>Main: Store Daily Start Balance
+end
+
+Main->>Strat: analizar(velas)
+Strat-->>Main: Signal (Bool), ATR (Float)
+
+alt In Position (Holding BTC)
+Main->>Stop: update(current_price, atr)
+Stop-->>Main: Sell Signal? (True/False)
+
+opt Sell Signal is True
+Main->>API: crear_orden(SELL)
+Main->>Main: Reset State
+end
+
+else No Position (Holding USDT)
+Main->>Risk: es_seguro_operar(balance, daily_limit)
+
+opt Risk OK
+Main->>News: obtener_sentimiento()
+
+opt Sentiment OK (> -0.8)
+alt Strategy Signal is True
+Main->>Risk: calcular_tamano_posicion()
+Risk-->>Main: Amount to Buy
+Main->>API: crear_orden(BUY)
+Main->>Stop: reset(price, atr)
+Main->>Main: Update State
+end
+end
+end
+end
+
+Main->>Main: Sleep 15s
+</div>
+<br>
+<h2>Component Roles</h2>
+<br>
+<p>1.  **Main Loop (`main.py`)**: Orchestrates the entire process. It decides when to call other modules and manages the application state (loaded from `bot_state.json`).</p>
+<p>2.  **BinanceConnector (`binance_api.py`)**: Handles all low-level communication with Binance (fetching prices, candles, balances, and placing orders). Supports a "Demo Mode" for safety.</p>
+<p>3.  **EstrategiaConfluencia (`strategy.py`)**: The "Brain". Analyzes candle data using technical indicators (EMA, RSI, ADX, Volume) to generate buy signals.</p>
+<p>4.  **RiskManager (`risk.py`)**: The "Safety Guard".</p>
+<p>*   **Daily Limit**: Stops trading if losses exceed 3% for the day.</p>
+<p>*   **Position Sizing**: Calculates trade size to risk max 1% of equity based on stop-loss distance.</p>
+<p>5.  **NewsAnalyzer (`sentiment.py`)**: Fetches the "Fear & Greed Index" to act as a market sentiment filter (prevents buying during extreme panic).</p>
+<p>6.  **TrailingStopATR (`risk.py`)**: Manages the exit strategy. It raises the stop-loss price as the market goes up, locking in profits, based on market volatility (ATR).</p>
+<br>
+
+</body>
+</html>

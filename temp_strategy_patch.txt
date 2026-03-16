@@ -1,0 +1,18 @@
+      # Señal Final
+        senal = bool(tendencia_alcista and rango_compra_rsi and (fuerza_tendencia or estable) and volumen_alto)
+        atr_actual = float(vela_actual_incompleta['ATR'])
+        
+        # LOGS DE DIAGNÓSTICO DE SEÑAL
+        if not senal:
+            motivos = []
+            if not tendencia_alcista: motivos.append(f"Tendencia (EMA200:{vela_evaluar['EMA_200']:.1f})")
+            if not rango_compra_rsi: motivos.append(f"RSI ({vela_evaluar['RSI_14']:.1f})")
+            if not volumen_alto: motivos.append("Volumen")
+            if not (fuerza_tendencia or estable): motivos.append(f"Fuerza/ADX ({vela_evaluar['ADX']:.1f})")
+            
+            if tendencia_alcista or estable:
+                print(f"❌ SIN SEÑAL | Motivos: {', '.join(motivos)}")
+        else:
+             print(f"🚀 SEÑAL TÉCNICA: RSI: {vela_evaluar['RSI_14']:.1f} | Stable: {estable}")
+
+        return senal, atr_actual, estable

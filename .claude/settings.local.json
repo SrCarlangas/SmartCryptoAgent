@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python backtest_simulator.py)",
+      "Bash(python backtest_v2.py)"
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+# Variables de entorno
+.env
+
+# Entorno virtual
+venv/
+
+# Archivos de estado locales
+state.json
+__pycache__/
+
+# archivo temporal
+binancekey.txt
+
+# logs
+#bot.log*

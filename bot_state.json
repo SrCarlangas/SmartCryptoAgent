@@ -1,0 +1,22 @@
+{
+    "in_position": false,
+    "entry_price": 0.0,
+    "amount": 0,
+    "stop_loss": 0.0,
+    "daily_start_balance": 4404.420322139599,
+    "last_updated_date": "2026-03-09",
+    "trade_mode": "swing",
+    "last_stop_loss_time": 1772155721.987434,
+    "take_profit": 0.0,
+    "scalp_sl": 0.0,
+    "swing_tp": 0.0,
+    "entry_time": 0.0,
+    "usdt_disponible": 4404.420322139599,
+    "last_scalp_attempt_time": 0,
+    "dca_ejecutado": false,
+    "trailing_active": false,
+    "highest_price": 0.0,
+    "dca_level": 0,
+    "esperando_rebote": false,
+    "dynamic_tp_activation": 0.015
+}
