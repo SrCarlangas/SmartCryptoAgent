@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -n \"roi_current\\\\|entry_price\\\\|total_invested\" /Users/carlosrojas/SmartCryptoAgent/modules/*.py)",
+      "Bash(find /Users/carlosrojas/SmartCryptoAgent -name estado*.json -o -name *state* -o -name *.json)",
+      "Read(//Users/carlosrojas/SmartCryptoAgent/**)",
+      "Bash(grep -rn \"lifetime\\\\|all_time\\\\|session\\\\|desde\" /Users/carlosrojas/SmartCryptoAgent/modules/ --include=*.py)",
+      "Bash(python3 -c \"import json; data = json.load\\(open\\(''bot_state.json''\\)\\); print\\(json.dumps\\({k: v for k,v in data.items\\(\\) if ''balance'' in k.lower\\(\\) or ''capital'' in k.lower\\(\\)}, indent=2\\)\\)\")",
+      "Bash(python3:*)",
+      "Bash(ls -la /Users/carlosrojas/SmartCryptoAgent/*.json)",
+      "Bash(python -c \":*)",
+      "Bash(uniq -f2)"
+    ]
+  }
+}

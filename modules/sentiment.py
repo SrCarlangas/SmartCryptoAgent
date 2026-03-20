@@ -8,30 +8,32 @@ class NewsAnalyzer:
 
     def obtener_sentimiento(self):
         """
-        Retorna un valor normalizado entre -1 (Miedo Extremo) y 1 (Codicia Extrema)
-        para mantener compatibilidad con la lógica de nuestro bot.
+        Retorna tupla (score_normalizado, valor_fng_raw):
+        - score_normalizado: float entre -1 (Miedo Extremo) y 1 (Codicia Extrema)
+        - valor_fng_raw: int 0-100 (valor original del Fear & Greed Index)
         """
         try:
             response = requests.get(self.url, timeout=10).json()
             data = response.get('data', [])
-            
-            if not data: return 0
+
+            if not data:
+                return 0, 50
 
             # El índice viene de 0 a 100
             # 0 = Miedo Extremo (Bearish)
             # 100 = Codicia Extrema (Bullish)
             valor_fng = int(data[0]['value'])
-            
+
             # Convertimos de escala 0-100 a escala -1 a 1
             # Fórmula: (valor - 50) / 50
             score_normalizado = (valor_fng - 50) / 50
-            
+
             # Log para depuración
             estado = data[0]['value_classification']
             logger.info(f"🧠 SENTIMIENTO MERCADO: {valor_fng}/100 ({estado}) -> Score: {score_normalizado:.2f}")
-            
-            return score_normalizado
+
+            return score_normalizado, valor_fng
 
         except Exception as e:
             logger.error(f"Error obteniendo Fear & Greed Index: {e}")
-            return 0 # Neutral por defecto
+            return 0, 50  # Neutral por defecto

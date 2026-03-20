@@ -1,22 +1,161 @@
 {
-    "in_position": false,
-    "entry_price": 0.0,
-    "amount": 0,
-    "stop_loss": 0.0,
-    "daily_start_balance": 4404.420322139599,
-    "last_updated_date": "2026-03-09",
-    "trade_mode": "swing",
-    "last_stop_loss_time": 1772155721.987434,
-    "take_profit": 0.0,
-    "scalp_sl": 0.0,
-    "swing_tp": 0.0,
-    "entry_time": 0.0,
-    "usdt_disponible": 4404.420322139599,
-    "last_scalp_attempt_time": 0,
-    "dca_ejecutado": false,
-    "trailing_active": false,
-    "highest_price": 0.0,
-    "dca_level": 0,
-    "esperando_rebote": false,
-    "dynamic_tp_activation": 0.015
+    "positions": [],
+    "usdt_disponible": 4220.26218618,
+    "daily_start_balance": 4220.26218618,
+    "last_updated_date": "2026-03-20",
+    "trade_history": [
+        {
+            "timestamp": "2026-03-19T21:20:12.862336",
+            "action": "SELL",
+            "price": 70273.29,
+            "amount": 0.05695,
+            "pnl": 31.79342348499995
+        }
+    ],
+    "agent_decisions": [
+        {
+            "timestamp": "2026-03-19T19:03:18.656838",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T19:10:28.935280",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T19:17:39.699638",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T19:25:04.982556",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T19:32:17.036104",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T19:39:27.475161",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T19:46:32.148665",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T19:53:39.473145",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T20:00:48.428498",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T20:07:56.567016",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T20:15:05.088106",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T20:22:35.410273",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T20:29:55.995465",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T20:37:09.043125",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T20:44:15.626159",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T20:51:31.612807",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T20:58:43.229995",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T21:05:53.456536",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T21:13:02.005292",
+            "source": "agent",
+            "action": "HOLD",
+            "confidence": 0.0,
+            "reasoning": ""
+        },
+        {
+            "timestamp": "2026-03-19T21:20:12.296822",
+            "source": "agent",
+            "action": "SELL",
+            "confidence": 0.0,
+            "reasoning": "Exit bajista_momentum_reversal: venta total [pos_1773929505]"
+        }
+    ],
+    "capital_inicial": 4220.264732695,
+    "total_pnl": 0.0,
+    "total_fees": 0.0,
+    "total_trades": 0
 }

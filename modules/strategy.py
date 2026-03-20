@@ -1,153 +1,20 @@
 import pandas as pd
 from ta.trend import EMAIndicator, ADXIndicator
 from ta.momentum import RSIIndicator
-from ta.volatility import AverageTrueRange
-from ta.volume import VolumeWeightedAveragePrice
-from ta.volatility import BollingerBands
+from ta.volatility import AverageTrueRange, BollingerBands
 from modules.logger import logger
-
-class EstrategiaConfluencia:
-    def esta_en_consolidacion(self, df, periodos=24, umbral_atr=4.0):
-        """
-        Verifica si el precio se ha mantenido en un rango estrecho (lateral)
-        comparando el rango High-Low contra el ATR.
-        """
-        if len(df) < periodos: return False
-        
-        recientes = df.iloc[-periodos:]
-        rango_precio = recientes['high'].max() - recientes['low'].min()
-        atr_medio = recientes['ATR'].mean()
-        
-        umbral = atr_medio * umbral_atr
-        esta_estable = bool(rango_precio < umbral)
-        
-        if esta_estable:
-            logger.info(f"⚖️ ESTABILIDAD CONFIRMADA | Rango {rango_precio:.2f} < Umbral {umbral:.2f}")
-            
-        return esta_estable
-
-    def analizar(self, ohlcv_data, rsi_min=25, rsi_max_trend=68, rsi_max_stable=65, skip_log=False):
-        """
-        Recibe velas y calcula confluencia técnica y estado de estabilidad.
-        Permite configurar umbrales RSI para mayor flexibilidad.
-        """
-        if not ohlcv_data:
-            return False, 0.0, False
-
-        df = pd.DataFrame(ohlcv_data, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        
-        # 1. Calcular Indicadores
-        df['EMA_50'] = EMAIndicator(close=df['close'], window=50).ema_indicator()
-        df['EMA_200'] = EMAIndicator(close=df['close'], window=200).ema_indicator()
-        df['RSI_14'] = RSIIndicator(close=df['close'], window=14).rsi()
-        df['ATR'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
-        df['ADX'] = ADXIndicator(high=df['high'], low=df['low'], close=df['close'], window=14).adx()
-        df['Vol_SMA_20'] = df['volume'].rolling(window=20).mean() # Media Móvil de Volumen
-        
-        # Evitar datos insuficientes
-        if len(df) < 200 or pd.isna(df['EMA_200'].iloc[-1]):
-            return False, 0.0, False
-
-        # 2. Evaluar Estabilidad (Consolidación)
-        estable = self.esta_en_consolidacion(df)
-
-        # 3. Evaluar Confluencia
-        vela_evaluar = df.iloc[-2] # Última vela cerrada
-        vela_anterior = df.iloc[-3]
-        vela_actual_incompleta = df.iloc[-1]
-
-        # A. Tendencia
-        tendencia_alcista_principal = (vela_evaluar['close'] > vela_evaluar['EMA_200'])
-        tendencia_local_alcista = (vela_evaluar['close'] > vela_evaluar['EMA_50'])
-
-        # B. Momentum (RSI)
-        rango_compra_rsi = (vela_evaluar['RSI_14'] > rsi_min) and (vela_evaluar['RSI_14'] < rsi_max_trend)
-        # En modo estable el RSI debe asegurar margen al alza antes de sobrecompra
-        rango_compra_rsi_estable = (vela_evaluar['RSI_14'] > rsi_min) and (vela_evaluar['RSI_14'] < rsi_max_stable)
-        momento_alcista = (vela_evaluar['RSI_14'] > vela_anterior['RSI_14'])
-
-        # C. Fuerza (ADX)
-        fuerza_tendencia = vela_evaluar['ADX'] > 20
-
-        # D. Volumen
-        volumen_alto = vela_evaluar['volume'] > (vela_evaluar['Vol_SMA_20'] * 0.8)
-
-        # --- LÓGICA DE SEÑAL FLEXIBLE ---
-        if estable:
-            # En consolidación también se exige que el RSI esté subiendo para confirmar momentum alcista.
-            senal = bool(tendencia_local_alcista and rango_compra_rsi_estable and momento_alcista)
-        else:
-            senal = bool(tendencia_alcista_principal and rango_compra_rsi and momento_alcista and fuerza_tendencia and volumen_alto)
-
-        atr_actual = float(vela_actual_incompleta['ATR'])
-
-        # FILTRO DE CONTINUIDAD DE PRECIO:
-        # Evita entrar cuando el precio en vivo ya cayó respecto al cierre de la vela de señal.
-        # Flexibilizado a -0.8% para evitar rechazos masivos de la señal.
-        if senal:
-            precio_senal = float(vela_evaluar['close'])
-            precio_actual_incompleto = float(vela_actual_incompleta['close'])
-            caida_vs_senal = (precio_actual_incompleto / precio_senal) - 1
-            if caida_vs_senal < -0.008:
-                if not skip_log:
-                    logger.info(f"⚠️ SEÑAL INVALIDADA: Precio actual {precio_actual_incompleto:.2f} cayó {caida_vs_senal*100:.2f}% vs cierre de señal {precio_senal:.2f}")
-                senal = False
-
-        # LOGS DE DIAGNÓSTICO
-        if not senal and not skip_log:
-            motivos = []
-            if estable:
-                if not tendencia_local_alcista: motivos.append(f"Tendencia Local (C:{vela_evaluar['close']:.2f} < EMA50:{vela_evaluar['EMA_50']:.1f})")
-                if not rango_compra_rsi_estable: motivos.append(f"RSI fuera de rango ({vela_evaluar['RSI_14']:.1f})")
-                if not momento_alcista: motivos.append("RSI no sube")
-            else:
-                if not tendencia_alcista_principal: motivos.append(f"Tendencia (EMA200:{vela_evaluar['EMA_200']:.1f})")
-                if not momento_alcista: motivos.append("RSI no sube")
-                if not volumen_alto: motivos.append("Volumen bajo")
-
-            if estable or tendencia_alcista_principal:
-                logger.info(f"❌ SIN SEÑAL | Motivos: {', '.join(motivos)}")
-        elif senal and not skip_log:
-             logger.info(f"🚀 SEÑAL DETECTADA ({'ESTABLE' if estable else 'TENDENCIA'}) | RSI: {vela_evaluar['RSI_14']:.1f}")
-
-        return senal, atr_actual, estable
-
-    def esperar_rebote_dca(self, ohlcv_1m):
-        """
-        Analiza velas muy cortas (1m) para confirmar que el precio
-        dejó de caer en caída libre y empezó a rebotar.
-        Condición: RSI_7 tocó sobreventa (<30) y ahora está subiendo.
-        """
-        if not ohlcv_1m or len(ohlcv_1m) < 14:
-            return False
-            
-        df = pd.DataFrame(ohlcv_1m, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        df['RSI_7'] = RSIIndicator(close=df['close'], window=7).rsi()
-        
-        if pd.isna(df['RSI_7'].iloc[-2]):
-            return False
-            
-        rsi_actual = df.iloc[-2]['RSI_7']
-        rsi_anterior = df.iloc[-3]['RSI_7']
-        
-        # Está en sobreventa local (<35 para dar margen) y rebotando
-        if rsi_actual < 35 and rsi_actual > rsi_anterior:
-            vela_actual = df.iloc[-2]
-            vela_verde = vela_actual['close'] > vela_actual['open']
-            if vela_verde:
-                logger.info(f"🪃 REBOTE CONFIRMADO (RSI 1m: {rsi_actual:.1f} ↗)")
-                return True
-                
-        return False
+from config import REGIME_PARAMS, SMART_DCA_RSI_TABLE
 
 
 class EstrategiaSmartDCA:
     """
-    Estrategia dual de 15m para Smart DCA:
-    - MODO 1 (REVERSIÓN): precio < Banda Inferior Bollinger + RSI sobrevendido (<38).
-      Ideal para caídas abruptas → promedia con DCA si sigue cayendo.
-    - MODO 2 (MOMENTUM): RSI 35-62 subiendo, precio sobre EMA21, impulso positivo.
-      Opera en mercados alcistas normales con entrada única conservadora.
+    Estrategia adaptativa por regimen de mercado.
+    - ALCISTA: Trend Following con entradas en retroceso Fibonacci.
+    - BAJISTA: Smart DCA agresivo con multiplicador RSI.
+    - LATERAL: Mean Reversion en soporte/resistencia.
+    - CRASH: Gestionado por orchestrator (protocolo de tranches).
+
+    Mantiene compatibilidad con modos REVERSION y MOMENTUM originales.
     """
 
     def analizar_filtro_1h(self, ohlcv_1h):
@@ -156,10 +23,10 @@ class EstrategiaSmartDCA:
         """
         if not ohlcv_1h or len(ohlcv_1h) < 55:
             return True  # sin datos: no bloquear
-            
+
         df = pd.DataFrame(ohlcv_1h, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         df['EMA_50'] = EMAIndicator(close=df['close'], window=50).ema_indicator()
-        
+
         if pd.isna(df['EMA_50'].iloc[-1]):
             return True
 
@@ -167,57 +34,188 @@ class EstrategiaSmartDCA:
         ema50 = float(df.iloc[-1]['EMA_50'])
         distancia = (precio_actual - ema50) / ema50
 
-        # Bloquear solo si estamos MUY por debajo de EMA50 en 1H (>5%)
         if distancia < -0.05:
             logger.info(f"📉 FILTRO MACRO 1H: {precio_actual:.0f} está {distancia*100:.1f}% bajo EMA50_1h {ema50:.0f} | BLOQUEADO")
             return False
         return True
-        
-    def analizar(self, ohlcv_15m, rsi_oversold=38, rsi_mom_min=35, rsi_mom_max=62, skip_log=False):
-        """
-        Evalúa señal dual en temporalidad 15m.
+
+    # ── Punto de entrada principal por regimen ──
+
+    def analizar_por_regimen(self, ohlcv_15m, regime, ctx):
+        """Despacha al metodo de analisis segun regimen.
         Returns: (bool, float, str|None) -> (hay_señal, atr_actual, modo)
-          modo: 'REVERSIÓN' | 'MOMENTUM' | None
+        """
+        if regime == "ALCISTA":
+            return self._analizar_alcista(ohlcv_15m, ctx)
+        elif regime == "BAJISTA":
+            return self._analizar_bajista(ohlcv_15m, ctx)
+        elif regime == "LATERAL":
+            return self._analizar_lateral(ohlcv_15m, ctx)
+        elif regime == "CRASH":
+            return False, 0, None  # crash: tranches en orchestrator
+        return False, 0, None
+
+    def _analizar_alcista(self, ohlcv_15m, ctx):
+        """ALCISTA: Comprar en retroceso Fibonacci 0.382-0.5.
+        Requiere RSI 40-55 (pullback sano) y precio > EMA_50_1h.
         """
         if not ohlcv_15m or len(ohlcv_15m) < 50:
             return False, 0.0, None
 
         df = pd.DataFrame(ohlcv_15m, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
-        
+        df['ATR'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
+        df['RSI_14'] = RSIIndicator(close=df['close'], window=14).rsi()
+
+        v = df.iloc[-2]
+        if pd.isna(v['RSI_14']) or pd.isna(v['ATR']):
+            return False, 0.0, None
+
+        atr = float(df.iloc[-1]['ATR']) if not pd.isna(df.iloc[-1]['ATR']) else float(v['ATR'])
+        precio = float(v['close'])
+        rsi = float(v['RSI_14'])
+        rsi_prev = float(df.iloc[-3]['RSI_14']) if not pd.isna(df.iloc[-3]['RSI_14']) else rsi
+
+        cfg = REGIME_PARAMS["ALCISTA"]
+
+        # Fibonacci: precio entre fib_382 y fib_500
+        if ctx.fib_382 > 0 and ctx.fib_500 > 0:
+            en_retroceso = ctx.fib_500 <= precio <= ctx.fib_382
+        else:
+            en_retroceso = False
+
+        # RSI en zona de pullback sano (40-55) y subiendo
+        rsi_ok = 40 <= rsi <= 55 and rsi > rsi_prev
+
+        # Precio sobre EMA_50_1h (confirmacion macro alcista)
+        macro_ok = ctx.ema_50_1h > 0 and precio > ctx.ema_50_1h
+
+        if en_retroceso and rsi_ok and macro_ok:
+            logger.info(
+                f"🚀 SEÑAL ALCISTA FIBONACCI | RSI:{rsi:.1f} | "
+                f"P:{precio:.2f} en retroceso [{ctx.fib_500:.0f}-{ctx.fib_382:.0f}]"
+            )
+            return True, atr, "FIBONACCI"
+
+        # Fallback: momentum clasico si no hay retroceso claro
+        df['EMA_21'] = EMAIndicator(close=df['close'], window=21).ema_indicator()
+        ema21 = float(v['EMA_21']) if not pd.isna(v['EMA_21']) else 0
+        momentum = (v['close'] - df.iloc[-3]['close']) / df.iloc[-3]['close']
+
+        if rsi > 35 and rsi < 62 and rsi > rsi_prev and precio > ema21 and momentum > 0.0008 and macro_ok:
+            logger.info(f"🚀 SEÑAL ALCISTA MOMENTUM | RSI:{rsi:.1f} | P:{precio:.2f} > EMA21:{ema21:.2f}")
+            return True, atr, "MOMENTUM"
+
+        return False, atr, None
+
+    def _analizar_bajista(self, ohlcv_15m, ctx):
+        """BAJISTA: Solo señales muy fuertes de reversion. Tamaño reducido 50%."""
+        if not ohlcv_15m or len(ohlcv_15m) < 50:
+            return False, 0.0, None
+
+        df = pd.DataFrame(ohlcv_15m, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
         bollinger = BollingerBands(close=df['close'], window=20, window_dev=2.0)
         df['BB_Lower'] = bollinger.bollinger_lband()
-        df['BB_Mid']   = bollinger.bollinger_mavg()
-        df['RSI_14']   = RSIIndicator(close=df['close'], window=14).rsi()
-        df['EMA_21']   = EMAIndicator(close=df['close'], window=21).ema_indicator()
-        df['ATR']      = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
-        
-        v     = df.iloc[-2]  # última vela cerrada 15m
-        v_ant = df.iloc[-3]  # penúltima
-        
+        df['RSI_14'] = RSIIndicator(close=df['close'], window=14).rsi()
+        df['ATR'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
+
+        v = df.iloc[-2]
+        if pd.isna(v['RSI_14']) or pd.isna(v['BB_Lower']):
+            return False, 0.0, None
+
+        atr = float(df.iloc[-1]['ATR']) if not pd.isna(df.iloc[-1]['ATR']) else float(v['ATR'])
+        precio = float(v['close'])
+        rsi = float(v['RSI_14'])
+        bb_inf = float(v['BB_Lower'])
+
+        # En bajista: solo reversion extrema (RSI < 30 + precio < BB_Lower)
+        if precio < bb_inf and rsi < 30:
+            logger.info(f"🚀 SEÑAL BAJISTA REVERSION | RSI:{rsi:.1f} | P:{precio:.2f} < BB:{bb_inf:.2f}")
+            return True, atr, "REVERSION_BEAR"
+
+        return False, atr, None
+
+    def _analizar_lateral(self, ohlcv_15m, ctx):
+        """LATERAL: Mean reversion — comprar en soporte RSI<40, vender en resistencia RSI>60."""
+        if not ohlcv_15m or len(ohlcv_15m) < 50:
+            return False, 0.0, None
+
+        df = pd.DataFrame(ohlcv_15m, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        bollinger = BollingerBands(close=df['close'], window=20, window_dev=2.0)
+        df['BB_Lower'] = bollinger.bollinger_lband()
+        df['BB_Mid'] = bollinger.bollinger_mavg()
+        df['RSI_14'] = RSIIndicator(close=df['close'], window=14).rsi()
+        df['EMA_21'] = EMAIndicator(close=df['close'], window=21).ema_indicator()
+        df['ATR'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
+
+        v = df.iloc[-2]
+        v_ant = df.iloc[-3]
+        if pd.isna(v['RSI_14']) or pd.isna(v['BB_Lower']):
+            return False, 0.0, None
+
+        atr = float(df.iloc[-1]['ATR']) if not pd.isna(df.iloc[-1]['ATR']) else float(v['ATR'])
+        precio = float(v['close'])
+        rsi = float(v['RSI_14'])
+        bb_inf = float(v['BB_Lower'])
+        rsi_sube = bool(v['RSI_14'] > v_ant['RSI_14'])
+
+        cfg = REGIME_PARAMS["LATERAL"]
+        tolerance = cfg["support_tolerance"]
+
+        # Comprar cerca de soporte (BB_Lower ±2%) con RSI < 40
+        near_support = precio <= bb_inf * (1 + tolerance)
+        if near_support and rsi < cfg["buy_rsi_max"] and rsi_sube:
+            logger.info(f"🚀 SEÑAL LATERAL MEAN_REVERSION | RSI:{rsi:.1f} | P:{precio:.2f} cerca BB_Inf:{bb_inf:.2f}")
+            return True, atr, "MEAN_REVERSION"
+
+        # Fallback: reversion clasica
+        if precio < bb_inf and rsi < 38:
+            logger.info(f"🚀 SEÑAL LATERAL REVERSION | RSI:{rsi:.1f} | P:{precio:.2f} < BB:{bb_inf:.2f}")
+            return True, atr, "REVERSIÓN"
+
+        # Fallback: momentum en zona media
+        ema21 = float(v['EMA_21']) if not pd.isna(v['EMA_21']) else 0
+        momentum = (v['close'] - v_ant['close']) / v_ant['close']
+        if 35 < rsi < 62 and rsi_sube and precio > ema21 and momentum > 0.0008:
+            logger.info(f"🚀 SEÑAL LATERAL MOMENTUM | RSI:{rsi:.1f} | Mom:{momentum*100:.3f}%")
+            return True, atr, "MOMENTUM"
+
+        return False, atr, None
+
+    # ── Metodo legacy compatible ──
+
+    def analizar(self, ohlcv_15m, rsi_oversold=38, rsi_mom_min=35, rsi_mom_max=62, skip_log=False):
+        """Metodo original dual REVERSION + MOMENTUM (usado como fallback)."""
+        if not ohlcv_15m or len(ohlcv_15m) < 50:
+            return False, 0.0, None
+
+        df = pd.DataFrame(ohlcv_15m, columns=['timestamp', 'open', 'high', 'low', 'close', 'volume'])
+        bollinger = BollingerBands(close=df['close'], window=20, window_dev=2.0)
+        df['BB_Lower'] = bollinger.bollinger_lband()
+        df['BB_Mid'] = bollinger.bollinger_mavg()
+        df['RSI_14'] = RSIIndicator(close=df['close'], window=14).rsi()
+        df['EMA_21'] = EMAIndicator(close=df['close'], window=21).ema_indicator()
+        df['ATR'] = AverageTrueRange(high=df['high'], low=df['low'], close=df['close'], window=14).average_true_range()
+
+        v = df.iloc[-2]
+        v_ant = df.iloc[-3]
+
         if pd.isna(v['BB_Lower']) or pd.isna(v['RSI_14']) or pd.isna(v['EMA_21']):
             return False, 0.0, None
-            
-        atr_actual    = float(df.iloc[-1]['ATR']) if not pd.isna(df.iloc[-1]['ATR']) else float(v['ATR'])
+
+        atr_actual = float(df.iloc[-1]['ATR']) if not pd.isna(df.iloc[-1]['ATR']) else float(v['ATR'])
         precio_cierre = float(v['close'])
-        bb_inf        = float(v['BB_Lower'])
-        rsi           = float(v['RSI_14'])
-        rsi_sube      = bool(v['RSI_14'] > v_ant['RSI_14'])
-        ema21         = float(v['EMA_21'])
-        momentum      = (v['close'] - v_ant['close']) / v_ant['close']
+        bb_inf = float(v['BB_Lower'])
+        rsi = float(v['RSI_14'])
+        rsi_sube = bool(v['RSI_14'] > v_ant['RSI_14'])
+        ema21 = float(v['EMA_21'])
+        momentum = (v['close'] - v_ant['close']) / v_ant['close']
 
-        # ── MODO 1: REVERSIÓN ──────────────────────────────────────────
-        # El precio cayó debajo de la Banda Inferior (anomalía estadística)
-        # y el RSI está en sobreventa. Señal de compra contraria=alta prob. rebote.
         senal_rev = bool(precio_cierre < bb_inf and rsi < rsi_oversold)
-
-        # ── MODO 2: MOMENTUM ───────────────────────────────────────────
-        # Mercado en tendencia normal alcista:
-        # RSI en zona sana (no sobrecomprado), subiendo, precio sobre la media.
         senal_mom = bool(
             rsi > rsi_mom_min and rsi < rsi_mom_max
             and rsi_sube
             and precio_cierre > ema21
-            and momentum > 0.0008     # impulso mínimo 0.08% por vela
+            and momentum > 0.0008
         )
 
         if senal_rev:
@@ -229,17 +227,73 @@ class EstrategiaSmartDCA:
             if not skip_log:
                 logger.info(f"🚀 SEÑAL 15m MOMENTUM | RSI:{rsi:.1f} | P:{precio_cierre:.2f} > EMA21:{ema21:.2f} | Mom:{momentum*100:.3f}%")
             return True, atr_actual, "MOMENTUM"
-            
+
         if not skip_log:
             motivos = []
-            # Diagnóstico reversión
             if precio_cierre >= bb_inf: motivos.append(f"P>{bb_inf:.0f}(BB_Inf)")
             if rsi >= rsi_oversold:     motivos.append(f"RSI={rsi:.1f}≥{rsi_oversold}")
-            # Diagnóstico momentum
             if rsi <= rsi_mom_min or rsi >= rsi_mom_max: motivos.append(f"RSI={rsi:.1f} fuera [35-62]")
             if not rsi_sube:            motivos.append("RSI baja")
             if precio_cierre <= ema21:  motivos.append(f"P<EMA21:{ema21:.0f}")
             if momentum <= 0.0008:      motivos.append(f"Mom={momentum*100:.3f}%<0.08%")
             logger.info(f"🔍 15m sin señal | P:{precio_cierre:.2f} BB_Inf:{bb_inf:.2f} RSI:{rsi:.1f} | {' | '.join(motivos)}")
-            
+
         return False, atr_actual, None
+
+    # ── Smart DCA ──
+
+    def get_dca_multiplier(self, rsi, regime):
+        """Retorna multiplicador DCA segun RSI y regimen."""
+        table = REGIME_PARAMS.get(regime, {}).get("dca_table", SMART_DCA_RSI_TABLE)
+        for rsi_max, mult in table:
+            if rsi < rsi_max:
+                return mult
+        return 0.0
+
+    # ── Salidas escalonadas ──
+
+    def evaluar_salidas_escalonadas(self, pos, precio, rsi, regime, weekly_rsi, ctx=None):
+        """Evalua triggers de venta parcial. Retorna lista de (trigger_name, sell_pct)."""
+        exits = []
+        cfg = REGIME_PARAMS.get(regime, {})
+
+        # BAJISTA: momentum reversal exit — proteger ganancias cuando el rally se agota
+        if regime == "BAJISTA" and ctx and pos.roi_current > 0.008:
+            rsi_cayendo = rsi < getattr(ctx, 'rsi_prev', rsi)
+            price_retrocede = ctx.price_change_15m < -0.001  # retroceso >0.1% en 15m
+            if rsi_cayendo and price_retrocede and "bajista_momentum_reversal" not in pos.exits_taken:
+                logger.info(
+                    f"📉 BAJISTA MOMENTUM REVERSAL | ROI:{pos.roi_current*100:.2f}% "
+                    f"RSI:{rsi:.1f}(cae) | d15m:{ctx.price_change_15m*100:.3f}%"
+                )
+                exits.append(("bajista_momentum_reversal", 1.0))  # venta total
+                return exits  # prioridad sobre otros triggers
+
+        # Solo ALCISTA tiene salidas escalonadas configuradas
+        if regime == "ALCISTA":
+            roi = (precio - pos.entry_price) / pos.entry_price if pos.entry_price > 0 else 0
+
+            for se in cfg.get("scaled_exits", []):
+                trigger_name = f"{se['trigger']}_{se.get('value', '')}"
+                if trigger_name in pos.exits_taken:
+                    continue
+
+                if se["trigger"] == "roi_pct" and roi >= se["value"]:
+                    exits.append((trigger_name, se["sell_pct"]))
+                elif se["trigger"] == "weekly_rsi_gt" and weekly_rsi > se["value"]:
+                    exits.append((trigger_name, se["sell_pct"]))
+                elif se["trigger"] == "resistance" and precio >= pos.entry_price * 1.25:
+                    # Proxy: si precio > 25% sobre entry, considerar resistencia
+                    exits.append((trigger_name, se["sell_pct"]))
+
+            # RSI > 70 → vender 15%
+            if rsi > 70 and "rsi_70_sell" not in pos.exits_taken:
+                exits.append(("rsi_70_sell", cfg.get("partial_sell_rsi70", 0.15)))
+
+        # LATERAL: vender en resistencia con RSI > 60
+        elif regime == "LATERAL":
+            if rsi > cfg.get("sell_rsi_min", 60) and pos.roi_current > 0:
+                if "lateral_resistance_sell" not in pos.exits_taken:
+                    exits.append(("lateral_resistance_sell", 1.0))  # venta total en lateral
+
+        return exits
