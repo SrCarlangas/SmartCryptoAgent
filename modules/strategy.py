@@ -127,8 +127,8 @@ class EstrategiaSmartDCA:
         rsi = float(v['RSI_14'])
         bb_inf = float(v['BB_Lower'])
 
-        # En bajista: solo reversion extrema (RSI < 30 + precio < BB_Lower)
-        if precio < bb_inf and rsi < 30:
+        # En bajista: reversion fuerte (RSI < 35 + precio < BB_Lower)
+        if precio < bb_inf and rsi < 35:
             logger.info(f"🚀 SEÑAL BAJISTA REVERSION | RSI:{rsi:.1f} | P:{precio:.2f} < BB:{bb_inf:.2f}")
             return True, atr, "REVERSION_BEAR"
 

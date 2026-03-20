@@ -11,5 +11,5 @@ __pycache__/
 # archivo temporal
 binancekey.txt
 
-# logs
-#bot.log*
+#logs
+bot.log*
