@@ -49,8 +49,11 @@ def test_prompts():
 
     assert "PARTIAL_SELL" in SYSTEM_PROMPT
     assert "HOLD" in SYSTEM_PROMPT
-    # System prompt should be very compact
-    assert len(SYSTEM_PROMPT) < 700, f"System prompt too long: {len(SYSTEM_PROMPT)} chars"
+    # System prompt: analista completo pero eficiente (< 1500 chars)
+    assert len(SYSTEM_PROMPT) < 1500, f"System prompt too long: {len(SYSTEM_PROMPT)} chars"
+    # Debe tener criterios de decision propios, no solo validacion
+    assert "analista" in SYSTEM_PROMPT.lower() or "experto" in SYSTEM_PROMPT.lower()
+    assert "reasoning" in SYSTEM_PROMPT.lower()
 
     # Sin posiciones, sin recomendacion
     ctx = MarketContext(
@@ -226,24 +229,29 @@ def test_scaled_exits():
     assert len(exits_lat) > 0, "Lateral should sell at resistance RSI > 60"
     assert exits_lat[0][1] == 1.0  # full sell in lateral
 
-    # BAJISTA: momentum reversal exit when ROI > 0.8% + RSI falling + price dropping
+    # BAJISTA: momentum reversal exit when ROI > 1.2% + RSI falling + price dropping >0.3%
     from modules.agent.models import MarketContext
-    pos_bear = PositionSummary(id="pos_b", entry_price=69000, amount=0.05, roi_current=0.012)
-    ctx_bear = MarketContext(price=69828, rsi_14=48, rsi_prev=52, price_change_15m=-0.002)
-    exits_bear = est.evaluar_salidas_escalonadas(pos_bear, 69828, 48, "BAJISTA", 50, ctx=ctx_bear)
-    assert len(exits_bear) > 0, "BAJISTA should trigger momentum reversal when ROI>0.8% + RSI falling"
+    pos_bear = PositionSummary(id="pos_b", entry_price=69000, amount=0.05, roi_current=0.013)
+    ctx_bear = MarketContext(price=69897, rsi_14=48, rsi_prev=52, price_change_15m=-0.004)
+    exits_bear = est.evaluar_salidas_escalonadas(pos_bear, 69897, 48, "BAJISTA", 50, ctx=ctx_bear)
+    assert len(exits_bear) > 0, "BAJISTA should trigger momentum reversal when ROI>1.2% + RSI falling + retrace>0.3%"
     assert exits_bear[0][0] == "bajista_momentum_reversal"
     assert exits_bear[0][1] == 1.0  # full sell
 
-    # BAJISTA: no exit when ROI too low
-    pos_bear2 = PositionSummary(id="pos_b2", entry_price=69000, amount=0.05, roi_current=0.005)
-    exits_bear2 = est.evaluar_salidas_escalonadas(pos_bear2, 69345, 48, "BAJISTA", 50, ctx=ctx_bear)
-    assert len(exits_bear2) == 0, "BAJISTA should NOT trigger momentum reversal when ROI < 0.8%"
+    # BAJISTA: no exit when ROI between 0.8% and 1.2% (below new threshold)
+    pos_bear2 = PositionSummary(id="pos_b2", entry_price=69000, amount=0.05, roi_current=0.009)
+    exits_bear2 = est.evaluar_salidas_escalonadas(pos_bear2, 69621, 48, "BAJISTA", 50, ctx=ctx_bear)
+    assert len(exits_bear2) == 0, "BAJISTA should NOT trigger momentum reversal when ROI < 1.2%"
+
+    # BAJISTA: no exit when price retrace too small (<0.3%)
+    ctx_bear_small = MarketContext(price=69897, rsi_14=48, rsi_prev=52, price_change_15m=-0.001)
+    exits_bear3 = est.evaluar_salidas_escalonadas(pos_bear, 69897, 48, "BAJISTA", 50, ctx=ctx_bear_small)
+    assert len(exits_bear3) == 0, "BAJISTA should NOT trigger when retrace < 0.3%"
 
     # BAJISTA: no exit when RSI still rising
-    ctx_bear_rising = MarketContext(price=69828, rsi_14=52, rsi_prev=48, price_change_15m=-0.002)
-    exits_bear3 = est.evaluar_salidas_escalonadas(pos_bear, 69828, 52, "BAJISTA", 50, ctx=ctx_bear_rising)
-    assert len(exits_bear3) == 0, "BAJISTA should NOT trigger when RSI still rising"
+    ctx_bear_rising = MarketContext(price=69897, rsi_14=52, rsi_prev=48, price_change_15m=-0.004)
+    exits_bear4 = est.evaluar_salidas_escalonadas(pos_bear, 69897, 52, "BAJISTA", 50, ctx=ctx_bear_rising)
+    assert len(exits_bear4) == 0, "BAJISTA should NOT trigger when RSI still rising"
 
     print("✅ test_scaled_exits OK")
 

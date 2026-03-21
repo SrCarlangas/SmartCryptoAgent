@@ -258,9 +258,10 @@ class EstrategiaSmartDCA:
         cfg = REGIME_PARAMS.get(regime, {})
 
         # BAJISTA: momentum reversal exit — proteger ganancias cuando el rally se agota
-        if regime == "BAJISTA" and ctx and pos.roi_current > 0.008:
+        # Solo si ROI > 1.2% (cercano al TP 1.4%) y retroceso fuerte confirmado
+        if regime == "BAJISTA" and ctx and pos.roi_current > 0.012:
             rsi_cayendo = rsi < getattr(ctx, 'rsi_prev', rsi)
-            price_retrocede = ctx.price_change_15m < -0.001  # retroceso >0.1% en 15m
+            price_retrocede = ctx.price_change_15m < -0.003  # retroceso >0.3% en 15m (confirmado)
             if rsi_cayendo and price_retrocede and "bajista_momentum_reversal" not in pos.exits_taken:
                 logger.info(
                     f"📉 BAJISTA MOMENTUM REVERSAL | ROI:{pos.roi_current*100:.2f}% "
@@ -290,9 +291,9 @@ class EstrategiaSmartDCA:
             if rsi > 70 and "rsi_70_sell" not in pos.exits_taken:
                 exits.append(("rsi_70_sell", cfg.get("partial_sell_rsi70", 0.15)))
 
-        # LATERAL: vender en resistencia con RSI > 60
+        # LATERAL: vender en resistencia con RSI > 60 (solo si ROI cubre fees)
         elif regime == "LATERAL":
-            if rsi > cfg.get("sell_rsi_min", 60) and pos.roi_current > 0:
+            if rsi > cfg.get("sell_rsi_min", 60) and pos.roi_current > 0.005:
                 if "lateral_resistance_sell" not in pos.exits_taken:
                     exits.append(("lateral_resistance_sell", 1.0))  # venta total en lateral
 

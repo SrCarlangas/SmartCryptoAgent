@@ -6,6 +6,7 @@ from modules.logger import logger
 from config import (
     AGENT_MODE, AGENT_MIN_CONFIDENCE,
     REGIME_PARAMS, DCA_BASE_UNIT_PCT, HARD_STOP_LOSS_PCT,
+    MIN_PROFIT_AFTER_FEES_PCT,
 )
 
 
@@ -30,18 +31,33 @@ class AgentOrchestrator:
             self._log_comparison(agent_decision, rules_decision)
             return self._decision_to_plan(rules_decision, ctx)
 
-        # 3. Primary: LLM valida la recomendacion de reglas
+        # 3. Primary: LLM es el analista principal, reglas son input informativo
         if self.mode == "primary":
             agent_decision = self._get_agent_decision(ctx, rules_decision)
 
-            if agent_decision.source == "rules_api_failure" or agent_decision.source == "rules_llm_failure":
+            if agent_decision.source in ("rules_api_failure", "rules_llm_failure"):
                 logger.info(f"🔄 LLM no disponible, usando reglas directamente")
                 return self._decision_to_plan(rules_decision, ctx)
 
-            if agent_decision.confidence < AGENT_MIN_CONFIDENCE:
-                logger.info(f"🔄 Confidence baja ({agent_decision.confidence:.2f}), usando reglas")
-                return self._decision_to_plan(rules_decision, ctx)
+            # Log si el agente difiere de las reglas
+            if agent_decision.action != rules_decision.action:
+                logger.info(
+                    f"🧠 AGENTE OVERRIDE: reglas={rules_decision.action} → agente={agent_decision.action} "
+                    f"(conf:{agent_decision.confidence:.2f}) | {agent_decision.reasoning}"
+                )
 
+            # Si el agente confirma la accion de reglas, copiar parametros pre-calculados
+            if agent_decision.action == rules_decision.action and rules_decision.action != "HOLD":
+                agent_decision.target_position_id = (
+                    agent_decision.target_position_id or rules_decision.target_position_id
+                )
+                agent_decision.suggested_allocation_pct = (
+                    agent_decision.suggested_allocation_pct or rules_decision.suggested_allocation_pct
+                )
+                agent_decision.sell_pct = rules_decision.sell_pct
+                agent_decision.exit_trigger = rules_decision.exit_trigger
+
+            # Risk guardian siempre valida
             approved, veto_reason = self.risk_manager.validate_decision(agent_decision, ctx)
             if not approved:
                 logger.info(f"🛡️ RISK GUARDIAN VETO: {veto_reason}")
@@ -123,6 +139,13 @@ class AgentOrchestrator:
             )
             if exits:
                 trigger_name, sell_pct = exits[0]  # una a la vez
+                # No vender si ganancia no cubre fees (excepto SL ya evaluados arriba)
+                if p.roi_current < MIN_PROFIT_AFTER_FEES_PCT:
+                    logger.info(
+                        f"⏸️ Exit {trigger_name} bloqueado: ROI {p.roi_current*100:.2f}% "
+                        f"< min {MIN_PROFIT_AFTER_FEES_PCT*100:.1f}% [{p.id}]"
+                    )
+                    continue
                 if sell_pct >= 1.0:
                     # Venta total (ej: lateral en resistencia)
                     decision.action = "SELL"
@@ -138,29 +161,16 @@ class AgentOrchestrator:
                     decision.reasoning = f"Scaled exit {trigger_name}: {sell_pct*100:.0f}% [{p.id}]"
                 return decision
 
-        # ── Prioridad 5: Take Profit por regimen (ajustado por PnL portafolio) ──
+        # ── Prioridad 5: Take Profit por regimen ──
         tp_pct = regime_cfg.get("tp_pct")
         if tp_pct:
-            # Si el portafolio está en pérdida, reducir TP para asegurar ganancias
-            effective_tp = tp_pct
-            if ctx.portfolio_pnl_pct < -0.005 and ctx.capital_inicial > 0:
-                loss_severity = min(abs(ctx.portfolio_pnl_pct), 0.10)  # cap 10%
-                # Reducir TP proporcionalmente: pérdida 5% → TP baja 50%
-                tp_reduction = loss_severity * 5  # 1% loss → 5% reduction, 5% → 25%, 10% → 50%
-                effective_tp = tp_pct * max(0.50, 1.0 - tp_reduction)  # nunca menos del 50% del TP
-                if ctx.num_positions > 0:
-                    logger.info(
-                        f"📊 TP ajustado por PnL portafolio ({ctx.portfolio_pnl:+.0f}): "
-                        f"{tp_pct*100:.1f}% → {effective_tp*100:.2f}%"
-                    )
-
             for p in ctx.positions:
-                if p.roi_current >= effective_tp:
+                if p.roi_current >= tp_pct:
                     decision.action = "SELL"
                     decision.target_position_id = p.id
                     decision.confidence = 0.9
                     decision.reasoning = (
-                        f"TP {regime} ({effective_tp*100:.1f}%): ROI {p.roi_current*100:.2f}% "
+                        f"TP {regime} ({tp_pct*100:.1f}%): ROI {p.roi_current*100:.2f}% "
                         f"| PnL portfolio: {ctx.portfolio_pnl:+.0f}"
                     )
                     return decision

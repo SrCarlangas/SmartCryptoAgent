@@ -40,7 +40,7 @@ class MarketAnalyst:
                     "system_instruction": SYSTEM_PROMPT,
                     "response_mime_type": "application/json",
                     "response_schema": RESPONSE_SCHEMA,
-                    "temperature": 0.1,
+                    "temperature": 0.3,
                     "max_output_tokens": AGENT_MAX_OUTPUT_TOKENS,
                 }
 
@@ -62,33 +62,28 @@ class MarketAnalyst:
 
                 data = self._parse_json(raw_text)
 
-                # LLM solo devuelve 3 campos: action, confidence, risk
+                # LLM devuelve 4 campos: action, confidence, risk, reasoning
                 llm_action = data.get("action", "HOLD")
                 llm_confidence = float(data.get("confidence", 0.0))
                 llm_risk = data.get("risk", "medium")
+                llm_reasoning = data.get("reasoning", "")[:80]  # cap length
 
-                # Reasoning viene de las reglas pre-calculadas, no del LLM
-                llm_reasoning = rules_recommendation.reasoning if rules_recommendation else ""
+                # Si LLM no dio reasoning, usar el de reglas como fallback
+                if not llm_reasoning and rules_recommendation:
+                    llm_reasoning = rules_recommendation.reasoning
 
-                # Construir decision combinando LLM + recomendacion pre-calculada
+                # Construir decision del agente
                 decision.action = llm_action
                 decision.confidence = llm_confidence
                 decision.reasoning = llm_reasoning
                 decision.risk_assessment = llm_risk
                 decision.market_regime = ctx.regime
 
-                # Si el LLM confirma la accion de reglas, usar los parametros pre-calculados
-                if rules_recommendation and llm_action == rules_recommendation.action:
-                    decision.target_position_id = rules_recommendation.target_position_id
-                    decision.suggested_allocation_pct = rules_recommendation.suggested_allocation_pct
-                    decision.sell_pct = rules_recommendation.sell_pct
-                    decision.exit_trigger = rules_recommendation.exit_trigger
-                elif llm_action in ("SELL", "DCA", "PARTIAL_SELL"):
-                    # LLM cambio la accion: auto-seleccionar position
+                # Auto-seleccionar position si el LLM no hereda de reglas
+                if llm_action in ("SELL", "DCA", "PARTIAL_SELL") and not decision.target_position_id:
                     decision.target_position_id = self._auto_select_position(ctx, llm_action)
-                    if rules_recommendation:
-                        decision.suggested_allocation_pct = rules_recommendation.suggested_allocation_pct
-                        decision.sell_pct = rules_recommendation.sell_pct
+                if llm_action == "BUY" and not decision.suggested_allocation_pct:
+                    decision.suggested_allocation_pct = 0.05  # default conservador
 
                 logger.info(
                     f"AGENTE [{elapsed:.1f}s]: {decision.action} "

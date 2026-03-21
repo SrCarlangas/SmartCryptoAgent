@@ -29,6 +29,7 @@ DAILY_LOSS_LIMIT_PCT = 0.05        # 5% perdida diaria -> detener
 MIN_USDT_RESERVE_PCT = 0.30        # mantener 30% en USDT siempre
 MAX_PORTFOLIO_EXPOSURE = 0.70      # 70% max (derivado de 30% reserva)
 DCA_BASE_UNIT_PCT = 0.03           # unidad base DCA: 2-5% del capital
+MIN_PROFIT_AFTER_FEES_PCT = 0.004  # 0.4% ROI minimo para vender (cubre 0.2% fees + margen)
 MAX_DCA_LEVELS = 5                 # maximo niveles DCA por posicion
 
 # Capital
