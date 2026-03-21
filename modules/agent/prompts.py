@@ -16,10 +16,11 @@ REGLAS:
 3. Consistencia con decisiones previas.
 4. Puedes ignorar recomendacion de reglas si tu analisis lo justifica.
 
-JSON: action(BUY/SELL/HOLD/DCA/PARTIAL_SELL), confidence(0-1), risk(low/medium/high), reasoning(max 15 palabras)."""
+JSON: action, confidence(0-1), risk, reasoning(MAXIMO 8 palabras, ejemplo: "RSI bajo+soporte, entrada favorable")."""
 
 
 # Schema para forzar respuesta JSON completa en Gemini 2.0 Flash
+# Orden importa: campos cortos primero, reasoning al final con maxLength
 RESPONSE_SCHEMA = {
     "type": "object",
     "properties": {
@@ -32,7 +33,7 @@ RESPONSE_SCHEMA = {
             "type": "string",
             "enum": ["low", "medium", "high"],
         },
-        "reasoning": {"type": "string"},
+        "reasoning": {"type": "string", "maxLength": 60},
     },
     "required": ["action", "confidence", "risk", "reasoning"],
 }
