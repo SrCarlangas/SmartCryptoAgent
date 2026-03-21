@@ -62,15 +62,13 @@ class MarketAnalyst:
 
                 data = self._parse_json(raw_text)
 
-                # LLM devuelve 4 campos: action, confidence, risk, reasoning
+                # LLM devuelve 3 campos: action, confidence, risk
                 llm_action = data.get("action", "HOLD")
                 llm_confidence = float(data.get("confidence", 0.0))
                 llm_risk = data.get("risk", "medium")
-                llm_reasoning = data.get("reasoning", "")[:80]  # cap length
 
-                # Si LLM no dio reasoning, usar el de reglas como fallback
-                if not llm_reasoning and rules_recommendation:
-                    llm_reasoning = rules_recommendation.reasoning
+                # Reasoning: reglas aportan contexto, LLM aporta la decision
+                llm_reasoning = rules_recommendation.reasoning if rules_recommendation else ""
 
                 # Construir decision del agente
                 decision.action = llm_action

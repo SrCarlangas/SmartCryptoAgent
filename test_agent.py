@@ -53,7 +53,7 @@ def test_prompts():
     assert len(SYSTEM_PROMPT) < 1500, f"System prompt too long: {len(SYSTEM_PROMPT)} chars"
     # Debe tener criterios de decision propios, no solo validacion
     assert "analista" in SYSTEM_PROMPT.lower() or "experto" in SYSTEM_PROMPT.lower()
-    assert "reasoning" in SYSTEM_PROMPT.lower()
+    assert "decision" in SYSTEM_PROMPT.lower() or "decides" in SYSTEM_PROMPT.lower()
 
     # Sin posiciones, sin recomendacion
     ctx = MarketContext(
