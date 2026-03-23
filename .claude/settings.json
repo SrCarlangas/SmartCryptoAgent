@@ -11,7 +11,15 @@
       "Bash(python -c \":*)",
       "Bash(uniq -f2)",
       "Bash(grep -E \"RSI.*[0-9]{2,3}\" /Users/carlosrojas/SmartCryptoAgent/bot.log)",
-      "Bash(grep -i \"creada\\\\|abierta\\\\|ejecuta\\\\|open.*pos\\\\|nueva.*pos\\\\|$\" /Users/carlosrojas/SmartCryptoAgent/bot.log)"
+      "Bash(grep -i \"creada\\\\|abierta\\\\|ejecuta\\\\|open.*pos\\\\|nueva.*pos\\\\|$\" /Users/carlosrojas/SmartCryptoAgent/bot.log)",
+      "Bash(grep -rn EMA_21 --include=*.py)",
+      "Read(//RISK GUARDIAN VETO/**)",
+      "Bash(cut -d'\\(' -f1)",
+      "Read(//RISK GUARDIAN VETO.*Exposicion/ {\n    timestamp=$1\"\"\"\"\"\"\"\" \"\"\"\"\"\"\"\"$2\n    match\\($0, /\\\\\\(\\([0-9.]+\\)%\\\\\\)/**)"
+    ],
+    "additionalDirectories": [
+      "/Users/carlosrojas/SmartCryptoAgent",
+      "/tmp"
     ]
   }
 }

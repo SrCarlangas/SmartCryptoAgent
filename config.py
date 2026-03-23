@@ -63,6 +63,9 @@ REGIME_PARAMS = {
         "min_rr": 2.5,
         "sl_pct": 0.08,
         "position_size_factor": 1.0,
+        "max_positions": 5,          # muchas posiciones, mercado favorable
+        "max_exposure": 0.70,        # hasta 70% desplegado
+        "min_reserve": 0.30,         # 30% reserva
         "dca_table": [(40, 2.0), (50, 0.5), (65, 0.0)],
         "partial_sell_rsi70": 0.15,
         "scaled_exits": [
@@ -74,7 +77,10 @@ REGIME_PARAMS = {
     "BAJISTA": {
         "sl_pct": 0.10,
         "tp_pct": 0.014,
-        "position_size_factor": 0.50,
+        "position_size_factor": 0.75,   # posiciones mas grandes (antes 0.50)
+        "max_positions": 2,              # MENOS posiciones, MAS capital para DCA
+        "max_exposure": 0.60,            # max 60% → reserva 40% para DCA
+        "min_reserve": 0.40,             # 40% reserva en bajista
         "usdt_reserve_target": 0.40,
         "dca_table": [(25, 3.0), (35, 2.5), (45, 2.0), (55, 1.0), (100, 0.0)],
         "ema200_bonus": 0.20,
@@ -82,6 +88,9 @@ REGIME_PARAMS = {
     "LATERAL": {
         "sl_pct": 0.05,
         "tp_pct": 0.015,
+        "max_positions": 3,              # posiciones moderadas
+        "max_exposure": 0.65,            # 65% max
+        "min_reserve": 0.35,             # 35% reserva
         "buy_rsi_max": 40,
         "sell_rsi_min": 60,
         "support_tolerance": 0.02,
@@ -90,6 +99,9 @@ REGIME_PARAMS = {
     },
     "CRASH": {
         "sl_pct": 0.15,
+        "max_positions": 1,              # una sola posicion en crash
+        "max_exposure": 0.40,            # conservar 60% liquido
+        "min_reserve": 0.60,
         "tranches": [
             {"drop_pct": 0.10, "deploy_pct": 0.33},
             {"drop_pct": 0.20, "deploy_pct": 0.33},

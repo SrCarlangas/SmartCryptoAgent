@@ -98,10 +98,11 @@ class EstrategiaSmartDCA:
 
         # Fallback: momentum clasico si no hay retroceso claro
         df['EMA_21'] = EMAIndicator(close=df['close'], window=21).ema_indicator()
-        ema21 = float(v['EMA_21']) if not pd.isna(v['EMA_21']) else 0
+        ema21_val = df['EMA_21'].iloc[-2]
+        ema21 = float(ema21_val) if not pd.isna(ema21_val) else 0
         momentum = (v['close'] - df.iloc[-3]['close']) / df.iloc[-3]['close']
 
-        if rsi > 35 and rsi < 62 and rsi > rsi_prev and precio > ema21 and momentum > 0.0008 and macro_ok:
+        if ema21 > 0 and rsi > 35 and rsi < 62 and rsi > rsi_prev and precio > ema21 and momentum > 0.0008 and macro_ok:
             logger.info(f"🚀 SEÑAL ALCISTA MOMENTUM | RSI:{rsi:.1f} | P:{precio:.2f} > EMA21:{ema21:.2f}")
             return True, atr, "MOMENTUM"
 
@@ -207,7 +208,7 @@ class EstrategiaSmartDCA:
         bb_inf = float(v['BB_Lower'])
         rsi = float(v['RSI_14'])
         rsi_sube = bool(v['RSI_14'] > v_ant['RSI_14'])
-        ema21 = float(v['EMA_21'])
+        ema21 = float(v['EMA_21']) if not pd.isna(v['EMA_21']) else 0
         momentum = (v['close'] - v_ant['close']) / v_ant['close']
 
         senal_rev = bool(precio_cierre < bb_inf and rsi < rsi_oversold)
@@ -258,17 +259,30 @@ class EstrategiaSmartDCA:
         cfg = REGIME_PARAMS.get(regime, {})
 
         # BAJISTA: momentum reversal exit — proteger ganancias cuando el rally se agota
-        # Solo si ROI > 1.2% (cercano al TP 1.4%) y retroceso fuerte confirmado
-        if regime == "BAJISTA" and ctx and pos.roi_current > 0.012:
+        if regime == "BAJISTA" and ctx:
             rsi_cayendo = rsi < getattr(ctx, 'rsi_prev', rsi)
-            price_retrocede = ctx.price_change_15m < -0.003  # retroceso >0.3% en 15m (confirmado)
-            if rsi_cayendo and price_retrocede and "bajista_momentum_reversal" not in pos.exits_taken:
+            price_retrocede = ctx.price_change_15m < -0.003  # retroceso >0.3% en 15m
+
+            # Caso 1: ROI > 1.2% y momentum cayendo → venta total
+            if pos.roi_current > 0.012 and rsi_cayendo and price_retrocede:
+                if "bajista_momentum_reversal" not in pos.exits_taken:
+                    logger.info(
+                        f"📉 BAJISTA MOMENTUM REVERSAL | ROI:{pos.roi_current*100:.2f}% "
+                        f"RSI:{rsi:.1f}(cae) | d15m:{ctx.price_change_15m*100:.3f}%"
+                    )
+                    exits.append(("bajista_momentum_reversal", 1.0))  # venta total
+                    return exits
+
+            # Caso 2: Ya hubo partial sell previo y ROI sigue positivo pero cayendo
+            # → cerrar el restante para no devolver las ganancias
+            has_prior_exit = len(pos.exits_taken) > 0
+            if has_prior_exit and pos.roi_current > 0.004 and rsi_cayendo and price_retrocede:
                 logger.info(
-                    f"📉 BAJISTA MOMENTUM REVERSAL | ROI:{pos.roi_current*100:.2f}% "
-                    f"RSI:{rsi:.1f}(cae) | d15m:{ctx.price_change_15m*100:.3f}%"
+                    f"📉 BAJISTA EXIT ESCALATION | ROI:{pos.roi_current*100:.2f}% "
+                    f"(post-partial) RSI:{rsi:.1f}(cae) | exits_prev:{pos.exits_taken}"
                 )
-                exits.append(("bajista_momentum_reversal", 1.0))  # venta total
-                return exits  # prioridad sobre otros triggers
+                exits.append(("bajista_exit_escalation", 1.0))  # venta total del restante
+                return exits
 
         # Solo ALCISTA tiene salidas escalonadas configuradas
         if regime == "ALCISTA":

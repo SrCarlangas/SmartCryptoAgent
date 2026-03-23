@@ -24,6 +24,7 @@ from config import (
     DCA_NIVEL_1_DROP, DCA_NIVEL_2_DROP,
     MAX_PORTFOLIO_EXPOSURE, COOLDOWN_AFTER_SL, COOLDOWN_AFTER_WIN,
     AGENT_MODE, MIN_POSITION_CAPITAL,
+    MAX_CONCURRENT_POSITIONS,
 )
 
 bot = BinanceConnector()
@@ -543,8 +544,15 @@ def main():
             regime_result = regime_detector.detect(ctx)
             ctx.regime = regime_result.regime
             ctx.regime_confidence = regime_result.confidence
+
+            # Actualizar slots disponibles segun regimen (limites adaptativos)
+            from config import REGIME_PARAMS as _rp
+            regime_max_pos = _rp.get(ctx.regime, {}).get("max_positions", MAX_CONCURRENT_POSITIONS)
+            ctx.available_slots = max(0, regime_max_pos - ctx.num_positions)
+
             logger.info(
                 f"📊 REGIMEN: {regime_result.regime} ({regime_result.confidence:.0%}) | {regime_result.details}"
+                f" | Slots: {ctx.available_slots}/{regime_max_pos}"
             )
 
             # Evaluar si debemos llamar al agente

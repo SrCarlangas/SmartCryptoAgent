@@ -109,7 +109,7 @@ def build_analysis_prompt(ctx: MarketContext, rules_recommendation: TradingDecis
         f"SUP:{ctx.support_price:.0f}|RES:{ctx.resistance_price:.0f}\n"
         f"{pos_lines}\n"
         f"CAP:${ctx.balance_total:.0f}|USDT:${ctx.usdt_disponible:.0f}|RES%:{ctx.usdt_reserve_pct*100:.0f}%"
-        f"|PnL_PORT:{ctx.portfolio_pnl:+.0f}({ctx.portfolio_pnl_pct*100:+.1f}%)\n"
+        f"|SLOTS:{ctx.available_slots}|PnL_PORT:{ctx.portfolio_pnl:+.0f}({ctx.portfolio_pnl_pct*100:+.1f}%)\n"
         f"{ctx.recent_trades_summary}\n"
         f"{ctx.recent_decisions_summary}"
         f"{rec_str}"

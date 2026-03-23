@@ -161,7 +161,7 @@ class MarketAnalyst:
         """Si el agente no especifico position_id, seleccionar la mas logica."""
         if not ctx.positions:
             return ""
-        if action == "SELL":
+        if action in ("SELL", "PARTIAL_SELL"):
             best = max(ctx.positions, key=lambda p: p.roi_current)
             return best.id
         if action == "DCA":

@@ -13,11 +13,15 @@ from config import (
 class AgentOrchestrator:
     """Coordina agente IA -> risk guardian -> decision final (multi-posicion, multi-regimen)."""
 
+    MAX_CONSECUTIVE_VETOS = 3  # tras N vetos, usar reglas sin LLM hasta que cambie el contexto
+
     def __init__(self, risk_manager: RiskManager, estrategia: EstrategiaSmartDCA):
         self.analyst = MarketAnalyst()
         self.risk_manager = risk_manager
         self.estrategia = estrategia
         self.mode = AGENT_MODE
+        self._consecutive_vetos = 0
+        self._last_veto_action = ""
 
     def decide(self, ctx: MarketContext, velas_15m=None, velas_1h=None) -> ExecutionPlan:
         plan = ExecutionPlan()
@@ -33,6 +37,18 @@ class AgentOrchestrator:
 
         # 3. Primary: LLM es el analista principal, reglas son input informativo
         if self.mode == "primary":
+            # Si el agente ha sido vetado N veces seguidas, usar reglas sin gastar LLM
+            if self._consecutive_vetos >= self.MAX_CONSECUTIVE_VETOS:
+                logger.info(
+                    f"⏭️ Saltando LLM: {self._consecutive_vetos} vetos consecutivos "
+                    f"({self._last_veto_action}). Usando reglas."
+                )
+                # Resetear si el contexto cambio (reglas sugieren otra accion)
+                if rules_decision.action != self._last_veto_action:
+                    self._consecutive_vetos = 0
+                else:
+                    return self._decision_to_plan(rules_decision, ctx)
+
             agent_decision = self._get_agent_decision(ctx, rules_decision)
 
             if agent_decision.source in ("rules_api_failure", "rules_llm_failure"):
@@ -57,14 +73,31 @@ class AgentOrchestrator:
                 agent_decision.sell_pct = rules_decision.sell_pct
                 agent_decision.exit_trigger = rules_decision.exit_trigger
 
+            # Validar que SELL/PARTIAL_SELL/DCA apuntan a posicion existente
+            if agent_decision.action in ("SELL", "PARTIAL_SELL", "DCA"):
+                pos_id = agent_decision.target_position_id
+                if not pos_id or not self.risk_manager._find_position(ctx, pos_id):
+                    logger.warning(
+                        f"⚠️ {agent_decision.action} descartado: posicion '{pos_id}' no existe. "
+                        f"Usando reglas."
+                    )
+                    return self._decision_to_plan(rules_decision, ctx)
+
             # Risk guardian siempre valida
             approved, veto_reason = self.risk_manager.validate_decision(agent_decision, ctx)
             if not approved:
-                logger.info(f"🛡️ RISK GUARDIAN VETO: {veto_reason}")
+                self._consecutive_vetos += 1
+                self._last_veto_action = agent_decision.action
+                logger.info(
+                    f"🛡️ RISK GUARDIAN VETO ({self._consecutive_vetos}x): {veto_reason}"
+                )
                 plan.vetoed = True
                 plan.veto_reason = veto_reason
                 return plan
 
+            # Veto roto: accion aprobada, resetear contador
+            self._consecutive_vetos = 0
+            self._last_veto_action = ""
             return self._decision_to_plan(agent_decision, ctx)
 
         # 4. Full: LLM valida, solo risk guardian limita

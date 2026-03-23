@@ -3,6 +3,7 @@ from config import (
     MAX_PORTFOLIO_EXPOSURE, MAX_CAPITAL_PER_POSITION_PCT,
     MIN_USDT_RESERVE_PCT, DAILY_LOSS_LIMIT_PCT,
     MAX_DCA_LEVELS, RISK_PER_TRADE_PCT,
+    REGIME_PARAMS, MAX_CONCURRENT_POSITIONS,
 )
 
 
@@ -22,14 +23,22 @@ class RiskManager:
 
     def validate_decision(self, decision, ctx):
         """
-        Risk Guardian multi-posicion: puerta no-negociable.
+        Risk Guardian multi-posicion: limites adaptativos por regimen.
         Retorna (aprobado: bool, razon_veto: str).
         """
         action = decision.action
+        regime_cfg = REGIME_PARAMS.get(ctx.regime, REGIME_PARAMS.get("LATERAL", {}))
 
-        # Regla 1: BUY requiere slots disponibles
-        if action == "BUY" and ctx.available_slots <= 0:
-            return False, f"No hay slots disponibles ({ctx.num_positions} posiciones)"
+        # Limites adaptativos del regimen (fallback a globales)
+        max_positions = regime_cfg.get("max_positions", MAX_CONCURRENT_POSITIONS)
+        max_exposure = regime_cfg.get("max_exposure", MAX_PORTFOLIO_EXPOSURE)
+        min_reserve = regime_cfg.get("min_reserve", MIN_USDT_RESERVE_PCT)
+
+        # Regla 1: BUY requiere slots disponibles (adaptativo por regimen)
+        if action == "BUY" and ctx.num_positions >= max_positions:
+            return False, (
+                f"Max posiciones {ctx.regime}: {ctx.num_positions}/{max_positions}"
+            )
 
         # Regla 2: DCA requiere posicion valida
         if action == "DCA":
@@ -57,14 +66,17 @@ class RiskManager:
         if action in ("BUY", "DCA") and ctx.sentiment_score < -0.95:
             return False, f"Panico absoluto (sentiment={ctx.sentiment_score:.2f})"
 
-        # Regla 5: Exposicion total maxima
+        # Regla 5: Exposicion total maxima (adaptativa por regimen)
         if action in ("BUY", "DCA"):
             alloc = decision.suggested_allocation_pct or 0.10
             new_capital = ctx.balance_total * alloc
             new_total = ctx.total_invested + new_capital
             new_exposure = new_total / ctx.balance_total if ctx.balance_total > 0 else 1.0
-            if new_exposure > MAX_PORTFOLIO_EXPOSURE:
-                return False, f"Exposicion total excederia {MAX_PORTFOLIO_EXPOSURE*100:.0f}% ({new_exposure*100:.1f}%)"
+            if new_exposure > max_exposure:
+                return False, (
+                    f"Exposicion {ctx.regime} excederia "
+                    f"{max_exposure*100:.0f}% ({new_exposure*100:.1f}%)"
+                )
 
         # Regla 6: Capital maximo por posicion
         if action == "BUY":
@@ -79,14 +91,17 @@ class RiskManager:
             if ctx.price_vs_ema50_1h < -0.05:
                 return False, f"Filtro macro 1H: precio {ctx.price_vs_ema50_1h*100:.1f}% bajo EMA50_1h"
 
-        # Regla 8: Reserva USDT minima 30%
+        # Regla 8: Reserva USDT minima (adaptativa por regimen)
         if action in ("BUY", "DCA"):
             alloc = decision.suggested_allocation_pct or 0.10
             new_capital = ctx.balance_total * alloc
             usdt_despues = ctx.usdt_disponible - new_capital
             reserve_pct = usdt_despues / ctx.balance_total if ctx.balance_total > 0 else 0
-            if reserve_pct < MIN_USDT_RESERVE_PCT:
-                return False, f"Reserva USDT caeria a {reserve_pct*100:.1f}% (min {MIN_USDT_RESERVE_PCT*100:.0f}%)"
+            if reserve_pct < min_reserve:
+                return False, (
+                    f"Reserva USDT {ctx.regime} caeria a "
+                    f"{reserve_pct*100:.1f}% (min {min_reserve*100:.0f}%)"
+                )
 
         # Regla 9: Limite de perdida del portafolio bloquea compras
         if action in ("BUY", "DCA") and ctx.capital_inicial > 0:

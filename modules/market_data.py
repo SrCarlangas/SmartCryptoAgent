@@ -4,7 +4,7 @@ from ta.volatility import BollingerBands, AverageTrueRange
 from ta.trend import EMAIndicator, ADXIndicator
 from modules.agent.models import MarketContext, PositionSummary
 from modules.logger import logger
-from config import MAX_CONCURRENT_POSITIONS
+from config import MAX_CONCURRENT_POSITIONS, REGIME_PARAMS
 
 
 def build_market_context(
