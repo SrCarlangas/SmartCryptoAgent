@@ -73,6 +73,11 @@ class AgentOrchestrator:
                 agent_decision.sell_pct = rules_decision.sell_pct
                 agent_decision.exit_trigger = rules_decision.exit_trigger
 
+            # Normalizar: PARTIAL_SELL con sell_pct>=1.0 es realmente un SELL
+            if agent_decision.action == "PARTIAL_SELL" and agent_decision.sell_pct >= 1.0:
+                logger.info(f"🔄 PARTIAL_SELL con sell_pct={agent_decision.sell_pct:.2f} → convertido a SELL")
+                agent_decision.action = "SELL"
+
             # Validar que SELL/PARTIAL_SELL/DCA apuntan a posicion existente
             if agent_decision.action in ("SELL", "PARTIAL_SELL", "DCA"):
                 pos_id = agent_decision.target_position_id
