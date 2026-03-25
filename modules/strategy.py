@@ -305,10 +305,10 @@ class EstrategiaSmartDCA:
             if rsi > 70 and "rsi_70_sell" not in pos.exits_taken:
                 exits.append(("rsi_70_sell", cfg.get("partial_sell_rsi70", 0.15)))
 
-        # LATERAL: vender en resistencia con RSI > 60 (solo si ROI cubre fees)
+        # LATERAL: venta parcial en resistencia con RSI > 65 (solo si ROI cubre fees+margen)
         elif regime == "LATERAL":
-            if rsi > cfg.get("sell_rsi_min", 60) and pos.roi_current > 0.005:
+            if rsi > cfg.get("sell_rsi_min", 65) and pos.roi_current > 0.008:
                 if "lateral_resistance_sell" not in pos.exits_taken:
-                    exits.append(("lateral_resistance_sell", 1.0))  # venta total en lateral
+                    exits.append(("lateral_resistance_sell", 0.50))  # 50% parcial, conservar exposición
 
         return exits

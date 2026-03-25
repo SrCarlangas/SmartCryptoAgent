@@ -88,11 +88,12 @@ REGIME_PARAMS = {
     "LATERAL": {
         "sl_pct": 0.05,
         "tp_pct": 0.015,
+        "position_size_factor": 1.2,     # posiciones 12% para superar drag de fees
         "max_positions": 3,              # posiciones moderadas
         "max_exposure": 0.65,            # 65% max
         "min_reserve": 0.35,             # 35% reserva
         "buy_rsi_max": 40,
-        "sell_rsi_min": 60,
+        "sell_rsi_min": 65,
         "support_tolerance": 0.02,
         "dca_table": [(35, 2.0), (45, 1.0), (100, 0.0)],
         "breakout_volume": 2.0,

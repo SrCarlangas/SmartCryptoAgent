@@ -223,11 +223,11 @@ def test_scaled_exits():
     exits4 = est.evaluar_salidas_escalonadas(pos, 81000, 55, "ALCISTA", 78)
     assert any("weekly_rsi_gt" in e[0] for e in exits4), "Weekly RSI > 75 should trigger"
 
-    # LATERAL: sell at resistance RSI > 60
+    # LATERAL: partial sell at resistance RSI > 65, ROI > 0.8%
     pos_lat = PositionSummary(id="pos_l", entry_price=83000, amount=0.05, roi_current=0.01)
-    exits_lat = est.evaluar_salidas_escalonadas(pos_lat, 84000, 65, "LATERAL", 50)
-    assert len(exits_lat) > 0, "Lateral should sell at resistance RSI > 60"
-    assert exits_lat[0][1] == 1.0  # full sell in lateral
+    exits_lat = est.evaluar_salidas_escalonadas(pos_lat, 84000, 67, "LATERAL", 50)
+    assert len(exits_lat) > 0, "Lateral should sell at resistance RSI > 65"
+    assert exits_lat[0][1] == 0.50  # 50% partial sell in lateral
 
     # BAJISTA: momentum reversal exit when ROI > 1.2% + RSI falling + price dropping >0.3%
     from modules.agent.models import MarketContext

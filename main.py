@@ -113,13 +113,14 @@ def reconciliar_estado(precio_actual):
             'entry_time': time.time(),
             'entry_mode': 'recovered_orphan',
             'is_orphan': True,
+            'is_frozen': True,
             'exits_taken': [],
         }
         estado['positions'] = [new_pos]
         logger.warning(
-            f"⚠️ Posición virtual {pos_id} creada para BTC huérfano. "
+            f"⚠️ Posición virtual {pos_id} creada para BTC huérfano (CONGELADA). "
             f"Precio ref: ${precio_actual:.2f} (NO es el costo real). "
-            f"Usar PnL real (balance) como referencia."
+            f"No se operará automáticamente."
         )
         modificado = True
 
@@ -491,13 +492,14 @@ def main():
                         'entry_time': time.time(),
                         'entry_mode': 'recovered_orphan',
                         'is_orphan': True,
+                        'is_frozen': True,
                         'exits_taken': [],
                     }
                     estado['positions'] = [new_pos]
                     guardar_estado(estado)
                     logger.warning(
-                        f"⚠️ BTC huérfano recuperado: {saldo_real_btc:.6f} BTC → posición {pos_id}. "
-                        f"Precio ref: ${precio:.2f} (NO es el costo real de adquisición)"
+                        f"⚠️ BTC huérfano recuperado: {saldo_real_btc:.6f} BTC → posición {pos_id} (CONGELADA). "
+                        f"Precio ref: ${precio:.2f} (NO es el costo real). No se operará automáticamente."
                     )
 
             # Cooldown global (solo bloquea nuevas compras, no gestiona existentes)

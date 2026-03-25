@@ -33,9 +33,10 @@ def build_market_context(
     else:
         ctx.sentiment_label = "Extreme Greed"
 
-    # Multi-position state
+    # Multi-position state (excluir posiciones congeladas del motor de decisiones)
     positions = estado.get('positions', [])
     ctx.positions = []
+    all_btc = 0.0
     for p in positions:
         ps = PositionSummary(
             id=p.get('id', ''),
@@ -49,10 +50,13 @@ def build_market_context(
         )
         if ps.entry_price > 0:
             ps.roi_current = (precio - ps.entry_price) / ps.entry_price
-        ctx.positions.append(ps)
+        all_btc += ps.amount
+        # Posiciones frozen (huérfanas) se trackean pero no se operan
+        if not p.get('is_frozen', False):
+            ctx.positions.append(ps)
 
     ctx.num_positions = len(ctx.positions)
-    ctx.total_btc_held = sum(p.amount for p in ctx.positions)
+    ctx.total_btc_held = all_btc  # incluye frozen para reconciliación con exchange
     ctx.total_invested = sum(p.total_invested for p in ctx.positions)
     ctx.available_slots = MAX_CONCURRENT_POSITIONS - ctx.num_positions
     ctx.exposure_pct = ctx.total_invested / ctx.balance_total if ctx.balance_total > 0 else 0

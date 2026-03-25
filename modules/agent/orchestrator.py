@@ -88,6 +88,20 @@ class AgentOrchestrator:
                     )
                     return self._decision_to_plan(rules_decision, ctx)
 
+            # Bloquear agent SELL en pérdida (excepto stop-loss)
+            if agent_decision.action in ("SELL", "PARTIAL_SELL") and agent_decision.source == "agent":
+                pos = self.risk_manager._find_position(ctx, agent_decision.target_position_id)
+                if pos and pos.roi_current < MIN_PROFIT_AFTER_FEES_PCT:
+                    regime_cfg = REGIME_PARAMS.get(ctx.regime, REGIME_PARAMS.get("LATERAL", {}))
+                    sl_pct = regime_cfg.get("sl_pct", 0.08)
+                    if pos.roi_current > -sl_pct and pos.roi_current > -HARD_STOP_LOSS_PCT:
+                        logger.info(
+                            f"⏸️ AGENTE SELL bloqueado: ROI {pos.roi_current*100:.2f}% "
+                            f"< min {MIN_PROFIT_AFTER_FEES_PCT*100:.1f}% "
+                            f"[{agent_decision.target_position_id}]"
+                        )
+                        return self._decision_to_plan(rules_decision, ctx)
+
             # Risk guardian siempre valida
             approved, veto_reason = self.risk_manager.validate_decision(agent_decision, ctx)
             if not approved:
@@ -111,6 +125,19 @@ class AgentOrchestrator:
 
             if agent_decision.source in ("rules_api_failure", "rules_llm_failure"):
                 return self._decision_to_plan(rules_decision, ctx)
+
+            # Bloquear agent SELL en pérdida (excepto stop-loss)
+            if agent_decision.action in ("SELL", "PARTIAL_SELL") and agent_decision.source == "agent":
+                pos = self.risk_manager._find_position(ctx, agent_decision.target_position_id)
+                if pos and pos.roi_current < MIN_PROFIT_AFTER_FEES_PCT:
+                    regime_cfg = REGIME_PARAMS.get(ctx.regime, REGIME_PARAMS.get("LATERAL", {}))
+                    sl_pct = regime_cfg.get("sl_pct", 0.08)
+                    if pos.roi_current > -sl_pct and pos.roi_current > -HARD_STOP_LOSS_PCT:
+                        logger.info(
+                            f"⏸️ AGENTE SELL bloqueado: ROI {pos.roi_current*100:.2f}% "
+                            f"< min {MIN_PROFIT_AFTER_FEES_PCT*100:.1f}%"
+                        )
+                        return self._decision_to_plan(rules_decision, ctx)
 
             approved, veto_reason = self.risk_manager.validate_decision(agent_decision, ctx)
             if not approved:
