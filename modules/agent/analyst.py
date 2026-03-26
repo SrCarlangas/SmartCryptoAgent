@@ -6,7 +6,7 @@ from modules.agent.prompts import SYSTEM_PROMPT, RESPONSE_SCHEMA, build_analysis
 from modules.logger import logger
 from config import (
     GOOGLE_API_KEY, AGENT_MODEL, AGENT_CALL_TIMEOUT,
-    AGENT_MAX_OUTPUT_TOKENS,
+    AGENT_MAX_OUTPUT_TOKENS, REGIME_PARAMS,
 )
 
 
@@ -81,7 +81,9 @@ class MarketAnalyst:
                 if llm_action in ("SELL", "DCA", "PARTIAL_SELL") and not decision.target_position_id:
                     decision.target_position_id = self._auto_select_position(ctx, llm_action)
                 if llm_action == "BUY" and not decision.suggested_allocation_pct:
-                    decision.suggested_allocation_pct = 0.05  # default conservador
+                    regime_cfg = REGIME_PARAMS.get(ctx.regime, REGIME_PARAMS.get("LATERAL", {}))
+                    factor = regime_cfg.get("position_size_factor", 1.0)
+                    decision.suggested_allocation_pct = 0.10 * factor  # 10% base * regime factor
 
                 logger.info(
                     f"AGENTE [{elapsed:.1f}s]: {decision.action} "
