@@ -276,6 +276,8 @@ def _ejecutar_venta(plan, precio, cooldown_counter):
         guardar_estado(estado)
         return cooldown_counter
 
+    if pos.get('is_frozen'):
+        logger.info(f"🔓 VENDIENDO posicion CONGELADA [{plan.target_position_id}]: ROI aprox ${(precio/pos['entry_price']-1)*100:.1f}% a ${precio:.2f}")
     logger.info(f"🛑 CERRANDO [{plan.target_position_id}]: {plan.reasoning} a ${precio:.2f}")
     orden = bot.crear_orden(SYMBOL, 'sell', cantidad_vender)
 

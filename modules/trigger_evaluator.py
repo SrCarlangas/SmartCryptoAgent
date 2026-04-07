@@ -40,18 +40,11 @@ class TriggerEvaluator:
             reasons.append(f"Cambio regimen: {self.last_regime}->{ctx.regime}")
             triggered = True
 
-        # --- Triggers con posiciones abiertas ---
-        if ctx.num_positions > 0:
-            for p in ctx.positions:
-                # ROI cruza umbral DCA
-                if p.dca_level == 0 and p.roi_current <= -DCA_NIVEL_1_DROP:
-                    reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza DCA1")
-                    triggered = True
-                elif p.dca_level == 1 and p.roi_current <= -DCA_NIVEL_2_DROP:
-                    reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza DCA2")
-                    triggered = True
-
-                # ROI cruza TP
+        # --- Triggers con posiciones abiertas (activas Y frozen) ---
+        all_positions = ctx.positions  # incluye frozen desde market_data fix
+        if all_positions:
+            for p in all_positions:
+                # ROI cruza TP (aplica a activas y frozen)
                 if p.roi_current >= TAKE_PROFIT_PCT:
                     reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza TP")
                     triggered = True
@@ -61,12 +54,22 @@ class TriggerEvaluator:
                     reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza 30% (scaled exit)")
                     triggered = True
 
+                # DCA triggers solo en posiciones activas (no frozen)
+                if not getattr(p, 'is_frozen', False):
+                    if p.dca_level == 0 and p.roi_current <= -DCA_NIVEL_1_DROP:
+                        reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza DCA1")
+                        triggered = True
+                    elif p.dca_level == 1 and p.roi_current <= -DCA_NIVEL_2_DROP:
+                        reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza DCA2")
+                        triggered = True
+
+        if ctx.num_positions > 0:
             # RSI cruza 70 (partial sell trigger en ALCISTA)
             if self.last_rsi <= 70 and ctx.rsi_14 > 70:
                 reasons.append(f"RSI cruzo 70 hacia arriba ({ctx.rsi_14:.1f})")
                 triggered = True
 
-            # Periodico cada 7 min si hay posiciones
+            # Periodico cada 7 min si hay posiciones activas
             if elapsed >= 420:
                 reasons.append("Periodico 7min (con posiciones)")
                 triggered = True

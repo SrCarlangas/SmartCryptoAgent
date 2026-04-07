@@ -50,14 +50,15 @@ def build_market_context(
         )
         if ps.entry_price > 0:
             ps.roi_current = (precio - ps.entry_price) / ps.entry_price
+        ps.is_frozen = p.get('is_frozen', False)
         all_btc += ps.amount
-        # Posiciones frozen (huérfanas) se trackean pero no se operan
-        if not p.get('is_frozen', False):
-            ctx.positions.append(ps)
+        ctx.positions.append(ps)  # incluye frozen; is_frozen marca las que solo pueden venderse
 
-    ctx.num_positions = len(ctx.positions)
-    ctx.total_btc_held = all_btc  # incluye frozen para reconciliación con exchange
-    ctx.total_invested = sum(p.total_invested for p in ctx.positions)
+    # num_positions y total_invested excluyen frozen para no distorsionar limites de riesgo
+    active_positions = [p for p in ctx.positions if not p.is_frozen]
+    ctx.num_positions = len(active_positions)
+    ctx.total_btc_held = all_btc
+    ctx.total_invested = sum(p.total_invested for p in active_positions)
     ctx.available_slots = MAX_CONCURRENT_POSITIONS - ctx.num_positions
     ctx.exposure_pct = ctx.total_invested / ctx.balance_total if ctx.balance_total > 0 else 0
 

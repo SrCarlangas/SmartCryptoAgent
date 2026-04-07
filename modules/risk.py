@@ -40,11 +40,13 @@ class RiskManager:
                 f"Max posiciones {ctx.regime}: {ctx.num_positions}/{max_positions}"
             )
 
-        # Regla 2: DCA requiere posicion valida
+        # Regla 2: DCA requiere posicion valida y no frozen
         if action == "DCA":
             target = self._find_position(ctx, decision.target_position_id)
             if not target:
                 return False, f"Posicion {decision.target_position_id} no encontrada para DCA"
+            if getattr(target, 'is_frozen', False):
+                return False, f"DCA bloqueado: posicion {decision.target_position_id} es huerfana/frozen"
             if target.dca_level >= MAX_DCA_LEVELS:
                 return False, f"DCA nivel maximo ({MAX_DCA_LEVELS}) alcanzado para {decision.target_position_id}"
 
