@@ -103,41 +103,29 @@ def reconciliar_estado(precio_actual):
             f"🔄 RECUPERACIÓN: BTC huérfano detectado: {saldo_btc:.6f} BTC "
             f"(≈ ${valor_btc:.2f}) sin posición virtual."
         )
-
-        # Inferir entry_price real: capital_inicial - USDT_libre = lo que se invirtió en BTC
-        capital_ini = estado.get('capital_inicial', 0.0)
-        capital_invertido_btc = capital_ini - saldo_usdt
-        entry_price_inferido = capital_invertido_btc / saldo_btc if saldo_btc > 0 and capital_invertido_btc > 0 else precio_actual
-        total_invested_inferido = capital_invertido_btc if capital_invertido_btc > 0 else valor_btc
-
-        # Usar precio inferido si es razonable (dentro de ±30% del precio actual)
-        precio_razonable = (
-            capital_invertido_btc > 0
-            and 0.70 * precio_actual <= entry_price_inferido <= 1.30 * precio_actual
-        )
-        entry_price_final = entry_price_inferido if precio_razonable else precio_actual
-        total_invested_final = total_invested_inferido if precio_razonable else valor_btc
-
+        # Usar precio actual como referencia de entrada.
+        # No se intenta inferir el precio real de compra porque capital_inicial puede estar
+        # distorsionado por PnL realizados previos, lo que genera entradas falsamente bajas.
+        # Con entry = precio_actual, el ROI arranca en 0% y el guard MIN_PROFIT impide
+        # vender a pérdida. El agente venderá solo si el precio sube lo suficiente.
         pos_id = generar_position_id()
         new_pos = {
             'id': pos_id,
-            'entry_price': entry_price_final,
+            'entry_price': precio_actual,
             'amount': saldo_btc,
             'dca_level': 0,
-            'total_invested': total_invested_final,
+            'total_invested': valor_btc,
             'entry_time': time.time(),
             'entry_mode': 'recovered_orphan',
             'is_orphan': True,
-            'is_frozen': not precio_razonable,  # descongelar si entry_price es confiable
+            'is_frozen': True,  # siempre frozen: visible para el agente pero no se compra/DCA
             'exits_taken': [],
         }
         estado['positions'] = [new_pos]
-        roi_inferido = (precio_actual / entry_price_final - 1) * 100 if entry_price_final > 0 else 0
         logger.warning(
             f"⚠️ Posición virtual {pos_id} creada para BTC huérfano (CONGELADA). "
-            f"Entry inferido: ${entry_price_final:.2f} | ROI aprox: {roi_inferido:+.1f}% "
-            f"({'inferido del capital_inicial' if precio_razonable else 'precio actual - no hay capital_inicial'}). "
-            f"Puede venderse automáticamente cuando cumpla criterios de salida."
+            f"Precio ref: ${precio_actual:.2f} (referencia de restart, NO el costo real). "
+            f"Se venderá automáticamente si el precio sube >0.4% desde aquí."
         )
         modificado = True
 
