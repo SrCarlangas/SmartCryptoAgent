@@ -6,7 +6,7 @@ from modules.agent.prompts import SYSTEM_PROMPT, RESPONSE_SCHEMA, build_analysis
 from modules.logger import logger
 from config import (
     GOOGLE_API_KEY, AGENT_MODEL, AGENT_CALL_TIMEOUT,
-    AGENT_MAX_OUTPUT_TOKENS, REGIME_PARAMS,
+    AGENT_MAX_OUTPUT_TOKENS, REGIME_PARAMS, MAX_DCA_LEVELS,
 )
 
 
@@ -163,12 +163,17 @@ class MarketAnalyst:
         """Si el agente no especifico position_id, seleccionar la mas logica."""
         if not ctx.positions:
             return ""
+        # Solo posiciones activas (no frozen) para SELL/PARTIAL_SELL
+        active = [p for p in ctx.positions if not getattr(p, 'is_frozen', False)]
+        frozen = [p for p in ctx.positions if getattr(p, 'is_frozen', False)]
         if action in ("SELL", "PARTIAL_SELL"):
-            best = max(ctx.positions, key=lambda p: p.roi_current)
-            return best.id
+            candidates = active if active else frozen  # frozen solo si no hay activas
+            if not candidates:
+                return ""
+            return max(candidates, key=lambda p: p.roi_current).id
         if action == "DCA":
-            candidates = [p for p in ctx.positions if p.dca_level < 2]
+            # Solo activas con DCA disponible (sin frozen, sin nivel maximo)
+            candidates = [p for p in active if p.dca_level < MAX_DCA_LEVELS]
             if candidates:
-                worst = min(candidates, key=lambda p: p.roi_current)
-                return worst.id
+                return min(candidates, key=lambda p: p.roi_current).id
         return ""

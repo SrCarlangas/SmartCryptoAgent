@@ -1,4 +1,5 @@
 from modules.agent.models import MarketContext, TradingDecision
+from config import MAX_DCA_LEVELS
 
 
 SYSTEM_PROMPT = """Analista experto trading BTC/USDT. TU tomas la decision final.
@@ -44,25 +45,35 @@ def build_analysis_prompt(ctx: MarketContext, rules_recommendation: TradingDecis
     ema21_rel = ">" if ctx.price > ctx.ema_21 else "<"
 
     # Posiciones comprimidas
-    if ctx.num_positions > 0:
+    all_positions = ctx.positions  # incluye frozen
+    active_positions = [p for p in all_positions if not getattr(p, 'is_frozen', False)]
+    dca_available = any(p.dca_level < MAX_DCA_LEVELS for p in active_positions)
+
+    if all_positions:
         max_slots = ctx.num_positions + ctx.available_slots
         pos_lines = f"POS({ctx.num_positions}/{max_slots}):\n"
-        for p in ctx.positions:
+        for p in all_positions:
             exits_str = f"|exits:{','.join(p.exits_taken)}" if p.exits_taken else ""
+            frozen_str = "|FROZEN" if getattr(p, 'is_frozen', False) else ""
+            dca_str = f"DCA:{p.dca_level}(MAX)" if p.dca_level >= MAX_DCA_LEVELS else f"DCA:{p.dca_level}"
             pos_lines += (
                 f" [{p.id}]E:{p.entry_price:.0f}|{p.amount:.5f}BTC"
-                f"|DCA:{p.dca_level}|ROI:{p.roi_current*100:+.2f}%"
-                f"|${p.total_invested:.0f}|{p.entry_mode[:12]}{exits_str}\n"
+                f"|{dca_str}|ROI:{p.roi_current*100:+.2f}%"
+                f"|${p.total_invested:.0f}|{p.entry_mode[:12]}{frozen_str}{exits_str}\n"
             )
         pos_lines += (
             f"TOT:{ctx.total_btc_held:.5f}BTC|${ctx.total_invested:.0f}"
             f"|EXP:{ctx.exposure_pct*100:.1f}%|SLOTS:{ctx.available_slots}"
         )
+        # Restricciones de accion según estado
+        if not dca_available:
+            pos_lines += "\n⚠️ DCA no disponible: todas las posiciones en nivel maximo"
     else:
         pos_lines = (
             f"POS(0/{ctx.available_slots}):VACIO"
             f"|ult:{ctx.last_trade_result or 'N/A'}"
             f"|cd:{'Si' if ctx.cooldown_active else 'No'}"
+            f"\n⚠️ Sin posiciones: SELL/DCA/PARTIAL_SELL no aplicables. Usa BUY o HOLD."
         )
 
     # EMA200 info
