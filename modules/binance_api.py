@@ -80,7 +80,8 @@ class BinanceConnector:
                 self.exchange.create_order, symbol, 'market', side, amount,
                 sin_reintento=['insufficient balance']  # Rechazo definitivo, no reintentar
             )
-            logger.info(f"✅ ORDEN ENVIADA A DEMO: {side.upper()} {amount} {symbol}")
+            modo = "REAL" if os.getenv('PROD_MODE') == 'True' else "DEMO"
+            logger.info(f"✅ ORDEN ENVIADA [{modo}]: {side.upper()} {amount} {symbol}")
             return order
         except Exception as e:
             logger.error(f"❌ Error creando orden: {e}")
