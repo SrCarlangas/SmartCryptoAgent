@@ -462,11 +462,20 @@ def main():
                 estado['usdt_disponible'] = balance_total
                 guardar_estado(estado)
 
-            # Capital inicial: se setea UNA sola vez, nunca se resetea
-            if estado.get('capital_inicial', 0) == 0:
+            # Capital inicial: se setea al arrancar. Si el valor guardado excede
+            # 2x el balance real reconciliado, probablemente es herencia de Demo.
+            capital_guardado = estado.get('capital_inicial', 0)
+            if capital_guardado == 0:
                 estado['capital_inicial'] = balance_total
                 guardar_estado(estado)
                 logger.info(f"📊 Capital inicial registrado: ${balance_total:.2f}")
+            elif capital_guardado > balance_total * 2.0:
+                logger.warning(
+                    f"⚠️ capital_inicial ${capital_guardado:.2f} excede 2x el balance real "
+                    f"${balance_total:.2f} (posible herencia de sesion Demo). Corrigiendo."
+                )
+                estado['capital_inicial'] = balance_total
+                guardar_estado(estado)
 
             # Log periódico de rendimiento (~10min = cada 20 ciclos de 30s)
             if ciclo_count % 20 == 0 and estado.get('capital_inicial', 0) > 0:
