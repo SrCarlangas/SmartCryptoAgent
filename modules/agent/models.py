@@ -15,6 +15,7 @@ class PositionSummary:
     entry_mode: str = ""
     exits_taken: List[str] = field(default_factory=list)
     is_frozen: bool = False  # posicion huerfana/congelada: puede venderse pero no comprarse/DCAs
+    peak_price: float = 0.0  # precio maximo alcanzado mientras trailing activo (>=1.5% ROI)
 
 
 @dataclass

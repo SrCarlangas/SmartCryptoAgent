@@ -226,19 +226,47 @@ class AgentOrchestrator:
                     decision.reasoning = f"Scaled exit {trigger_name}: {sell_pct*100:.0f}% [{p.id}]"
                 return decision
 
-        # ── Prioridad 5: Take Profit por regimen ──
+        # ── Prioridad 5: Take Profit / Trailing Stop ──
         tp_pct = regime_cfg.get("tp_pct")
         if tp_pct:
-            for p in ctx.positions:
-                if p.roi_current >= tp_pct:
-                    decision.action = "SELL"
-                    decision.target_position_id = p.id
-                    decision.confidence = 0.9
-                    decision.reasoning = (
-                        f"TP {regime} ({tp_pct*100:.1f}%): ROI {p.roi_current*100:.2f}% "
-                        f"| PnL portfolio: {ctx.portfolio_pnl:+.0f}"
-                    )
-                    return decision
+            if regime == "ALCISTA":
+                trailing_stop_pct = regime_cfg.get("trailing_stop_pct", 0.005)
+                trailing_min_roi = regime_cfg.get("trailing_min_exit_roi", 0.010)
+                for p in ctx.positions:
+                    if p.roi_current >= tp_pct:
+                        if p.peak_price > 0:
+                            trail_price = p.peak_price * (1 - trailing_stop_pct)
+                            drop_pct = (p.peak_price - ctx.price) / p.peak_price
+                            if ctx.price <= trail_price and p.roi_current >= trailing_min_roi:
+                                decision.action = "SELL"
+                                decision.target_position_id = p.id
+                                decision.confidence = 0.9
+                                decision.reasoning = (
+                                    f"Trailing stop ALCISTA: ROI {p.roi_current*100:.2f}% "
+                                    f"| pico ${p.peak_price:.0f} caida {drop_pct*100:.2f}%"
+                                )
+                                return decision
+                        else:
+                            # Sin peak aun: vender directamente al alcanzar tp_pct
+                            decision.action = "SELL"
+                            decision.target_position_id = p.id
+                            decision.confidence = 0.85
+                            decision.reasoning = (
+                                f"TP ALCISTA {tp_pct*100:.1f}%: ROI {p.roi_current*100:.2f}% "
+                                f"(trailing sin peak)"
+                            )
+                            return decision
+            else:
+                for p in ctx.positions:
+                    if p.roi_current >= tp_pct:
+                        decision.action = "SELL"
+                        decision.target_position_id = p.id
+                        decision.confidence = 0.9
+                        decision.reasoning = (
+                            f"TP {regime} ({tp_pct*100:.1f}%): ROI {p.roi_current*100:.2f}% "
+                            f"| PnL portfolio: {ctx.portfolio_pnl:+.0f}"
+                        )
+                        return decision
 
         # ALCISTA: TP usa Fibonacci 1.618
         if regime == "ALCISTA" and ctx.fib_1618 > 0:

@@ -49,6 +49,15 @@ class TriggerEvaluator:
                     reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza TP")
                     triggered = True
 
+                # Trailing stop: precio cae desde pico con trailing activo
+                if p.peak_price > 0 and p.roi_current >= 0.010:
+                    drop_from_peak = (p.peak_price - ctx.price) / p.peak_price
+                    if drop_from_peak >= 0.003:  # caida >=0.3% desde pico → avisar
+                        reasons.append(
+                            f"[{p.id}] Trailing: -{drop_from_peak*100:.2f}% desde pico ${p.peak_price:.0f}"
+                        )
+                        triggered = True
+
                 # ROI cruza 30% (scaled exit en ALCISTA)
                 if p.roi_current >= 0.30 and "roi_pct_0.3" not in p.exits_taken:
                     reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza 30% (scaled exit)")

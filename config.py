@@ -60,7 +60,9 @@ REGIME_PARAMS = {
         "fib_entry_low": 0.382,
         "fib_entry_high": 0.5,
         "tp_fib_extension": 1.618,
-        "tp_pct": 0.02,              # 2% objetivo mínimo antes de salir
+        "tp_pct": 0.015,             # Activar trailing stop desde 1.5% ROI
+        "trailing_stop_pct": 0.005,  # Vender si cae 0.5% desde el pico
+        "trailing_min_exit_roi": 0.010,  # Minimo 1.0% ROI al ejecutar trailing sell
         "min_rr": 2.5,
         "sl_pct": 0.08,
         "position_size_factor": 1.0,
@@ -68,7 +70,7 @@ REGIME_PARAMS = {
         "max_exposure": 0.70,        # hasta 70% desplegado
         "min_reserve": 0.30,         # 30% reserva
         "dca_table": [(40, 2.0), (50, 0.5), (65, 0.0)],
-        "partial_sell_rsi75": 0.15,  # vender 15% solo cuando RSI>75 (antes: >70)
+        "partial_sell_rsi75": 0.15,  # vender 15% solo cuando RSI>75
         "scaled_exits": [
             {"trigger": "roi_pct", "value": 0.30, "sell_pct": 0.25},
             {"trigger": "weekly_rsi_gt", "value": 75, "sell_pct": 0.25},

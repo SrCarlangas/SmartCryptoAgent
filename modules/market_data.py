@@ -47,6 +47,7 @@ def build_market_context(
             entry_time=p.get('entry_time', 0.0),
             entry_mode=p.get('entry_mode', ''),
             exits_taken=p.get('exits_taken', []),
+            peak_price=p.get('peak_price', 0.0),
         )
         if ps.entry_price > 0:
             ps.roi_current = (precio - ps.entry_price) / ps.entry_price

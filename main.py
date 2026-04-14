@@ -24,7 +24,7 @@ from config import (
     DCA_NIVEL_1_DROP, DCA_NIVEL_2_DROP,
     MAX_PORTFOLIO_EXPOSURE, COOLDOWN_AFTER_SL, COOLDOWN_AFTER_WIN,
     AGENT_MODE, MIN_POSITION_CAPITAL,
-    MAX_CONCURRENT_POSITIONS,
+    MAX_CONCURRENT_POSITIONS, REGIME_PARAMS,
 )
 
 bot = BinanceConnector()
@@ -571,6 +571,24 @@ def main():
             ctx.cooldown_active = cooldown_counter > 0
             ctx.recent_trades_summary = get_recent_trades_summary(estado)
             ctx.recent_decisions_summary = get_recent_decisions_summary(estado)
+
+            # Trailing stop: actualizar peak_price en posiciones activas cada ciclo.
+            # Se guarda en el estado para sobrevivir reinicios.
+            trailing_activation = REGIME_PARAMS.get(ctx.regime, {}).get('tp_pct', 0.015)
+            peak_updated = False
+            for pos_dict in estado.get('positions', []):
+                if pos_dict.get('is_frozen', False):
+                    continue
+                entry_price = pos_dict.get('entry_price', 0)
+                if entry_price <= 0:
+                    continue
+                roi_now = (precio - entry_price) / entry_price
+                if roi_now >= trailing_activation:
+                    if precio > pos_dict.get('peak_price', 0):
+                        pos_dict['peak_price'] = precio
+                        peak_updated = True
+            if peak_updated:
+                guardar_estado(estado)
 
             # PnL real del portafolio
             capital_ini = estado.get('capital_inicial', 0)
