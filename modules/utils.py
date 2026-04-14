@@ -81,7 +81,8 @@ def guardar_estado(estado):
         with open(STATE_FILE, 'w') as f:
             json.dump(estado, f, indent=4)
     except Exception as e:
-        print(f"❌ Error guardando estado: {e}")
+        from modules.logger import logger
+        logger.error(f"❌ Error guardando estado en {STATE_FILE}: {e}")
 
 
 def generar_position_id():
