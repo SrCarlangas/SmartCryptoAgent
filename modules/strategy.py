@@ -102,7 +102,7 @@ class EstrategiaSmartDCA:
         ema21 = float(ema21_val) if not pd.isna(ema21_val) else 0
         momentum = (v['close'] - df.iloc[-3]['close']) / df.iloc[-3]['close']
 
-        if ema21 > 0 and rsi > 35 and rsi < 62 and rsi > rsi_prev and precio > ema21 and momentum > 0.0008 and macro_ok:
+        if ema21 > 0 and rsi > 35 and rsi < 65 and rsi > rsi_prev and precio > ema21 and momentum > 0.0008 and macro_ok:
             logger.info(f"🚀 SEÑAL ALCISTA MOMENTUM | RSI:{rsi:.1f} | P:{precio:.2f} > EMA21:{ema21:.2f}")
             return True, atr, "MOMENTUM"
 
@@ -301,9 +301,9 @@ class EstrategiaSmartDCA:
                     # Proxy: si precio > 25% sobre entry, considerar resistencia
                     exits.append((trigger_name, se["sell_pct"]))
 
-            # RSI > 70 → vender 15%
-            if rsi > 70 and "rsi_70_sell" not in pos.exits_taken:
-                exits.append(("rsi_70_sell", cfg.get("partial_sell_rsi70", 0.15)))
+            # RSI > 75 → vender 15% (umbral subido de 70 a 75 para aguantar más en ALCISTA)
+            if rsi > 75 and "rsi_75_sell" not in pos.exits_taken:
+                exits.append(("rsi_75_sell", cfg.get("partial_sell_rsi75", 0.15)))
 
         # LATERAL: venta parcial en resistencia con RSI > 65 (solo si ROI cubre fees+margen)
         elif regime == "LATERAL":

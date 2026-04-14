@@ -83,6 +83,9 @@ class TriggerEvaluator:
             if self.last_rsi <= 62 and ctx.rsi_14 > 62:
                 reasons.append(f"RSI cruzo 62 hacia arriba ({ctx.rsi_14:.1f})")
                 triggered = True
+            if self.last_rsi >= 65 and ctx.rsi_14 < 65:
+                reasons.append(f"RSI enfria desde rally: {self.last_rsi:.1f}->{ctx.rsi_14:.1f}")
+                triggered = True
 
             # Precio cruza Bollinger inferior
             if self.last_price > ctx.bb_lower > 0 and ctx.price <= ctx.bb_lower:
