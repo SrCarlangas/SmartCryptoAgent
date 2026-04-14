@@ -354,6 +354,23 @@ def _ejecutar_venta_parcial(plan, precio, cooldown_counter):
         logger.info(f"⚠️ Cantidad parcial demasiado pequeña para [{plan.target_position_id}]")
         return cooldown_counter
 
+    # Guard notional mínimo Binance (~10 USDT). Si el parcial queda por debajo,
+    # liquidar la posición completa en lugar de fallar con -1013 NOTIONAL.
+    if cantidad * precio < 10.0:
+        cantidad_total = _truncar_btc(pos['amount'])
+        if cantidad_total * precio < 10.0:
+            logger.info(
+                f"⚠️ [{plan.target_position_id}] posicion demasiado pequeña "
+                f"(${cantidad_total*precio:.2f} < $10 notional), omitiendo"
+            )
+            return cooldown_counter
+        logger.info(
+            f"⚠️ Partial {sell_pct*100:.0f}% = ${cantidad*precio:.2f} < $10 notional. "
+            f"Liquidando posicion completa [{plan.target_position_id}]."
+        )
+        cantidad = cantidad_total
+        sell_pct = 1.0
+
     # Verificar saldo real
     saldo_real_btc = bot.obtener_saldo_btc()
     if saldo_real_btc is not None:
@@ -377,12 +394,16 @@ def _ejecutar_venta_parcial(plan, precio, cooldown_counter):
 
     # Actualizar posicion (NO eliminar)
     sold_qty = cantidad_real if cantidad_real > 0 else cantidad
+    total_invested_pre = pos.get('total_invested', 0)
     pos['amount'] -= sold_qty
     pos['total_invested'] *= (1 - sell_pct)
     pos.setdefault('exits_taken', []).append(plan.exit_trigger)
 
-    # PnL parcial (proporcional)
-    pnl_parcial = proceeds_netos - (pos.get('total_invested', 0) * sell_pct / (1 - sell_pct + 1e-9))
+    # PnL parcial (proporcional). Liquidacion total usa formula directa.
+    if sell_pct >= 1.0:
+        pnl_parcial = proceeds_netos - total_invested_pre
+    else:
+        pnl_parcial = proceeds_netos - (pos['total_invested'] * sell_pct / (1 - sell_pct + 1e-9))
     registrar_trade(estado, "PARTIAL_SELL", precio, sold_qty, pnl_parcial, fee=fee_venta)
 
     # Si queda dust, cerrar totalmente
