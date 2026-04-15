@@ -12,4 +12,5 @@ __pycache__/
 binancekey.txt
 
 #logs
-bot.log*
+bot.log
+botHist.log
