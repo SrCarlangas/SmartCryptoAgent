@@ -10,7 +10,7 @@ from modules.utils import (
     get_total_btc_positions, get_total_invested, has_open_positions,
     get_position_by_id, remove_position,
     registrar_decision_agente, registrar_trade, get_recent_trades_summary,
-    get_recent_decisions_summary,
+    get_recent_decisions_summary, calcular_avg_entrada_desde_historial,
 )
 from modules.logger import logger
 from modules.market_data import build_market_context
@@ -518,14 +518,23 @@ def main():
                     estado['usdt_disponible'] = _usdt_ref(balance_total)
                     guardar_estado(estado)
                 elif not positions and saldo_real_btc >= 0.0001:
-                    valor_btc = saldo_real_btc * precio
+                    # Intentar calcular el precio promedio real desde el historial de trades
+                    avg_precio, total_costo = calcular_avg_entrada_desde_historial(
+                        estado, saldo_real_btc
+                    )
+                    if avg_precio is not None:
+                        ref_nota = f"Avg desde historial: ${avg_precio:.2f}"
+                    else:
+                        avg_precio = precio
+                        total_costo = saldo_real_btc * precio
+                        ref_nota = f"Avg de mercado (historial insuficiente): ${precio:.2f}"
                     pos_id = generar_position_id()
                     new_pos = {
                         'id': pos_id,
-                        'entry_price': precio,
+                        'entry_price': avg_precio,
                         'amount': saldo_real_btc,
                         'dca_level': 0,
-                        'total_invested': valor_btc,
+                        'total_invested': total_costo,
                         'entry_time': time.time(),
                         'entry_mode': 'recovered_orphan',
                         'is_orphan': True,
@@ -536,7 +545,7 @@ def main():
                     guardar_estado(estado)
                     logger.warning(
                         f"⚠️ BTC huérfano recuperado: {saldo_real_btc:.6f} BTC → posición {pos_id} (CONGELADA). "
-                        f"Precio ref: ${precio:.2f} (NO es el costo real). No se operará automáticamente."
+                        f"{ref_nota}. No se operará automáticamente."
                     )
 
             # Cooldown global (solo bloquea nuevas compras, no gestiona existentes)

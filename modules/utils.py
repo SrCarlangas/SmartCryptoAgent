@@ -76,6 +76,40 @@ def cargar_estado():
     }
 
 
+def calcular_avg_entrada_desde_historial(estado, saldo_btc):
+    """
+    Calcula el precio promedio ponderado de las compras no liquidadas usando
+    trade_history. Retorna (avg_price, total_cost) o (None, None) si el historial
+    no cubre suficientemente el saldo actual (fallback: precio de mercado).
+    """
+    history = estado.get('trade_history', [])
+    if not history:
+        return None, None
+
+    compras = [
+        (t['price'], t['amount']) for t in history
+        if t.get('action') in ('BUY', 'DCA') and t.get('amount', 0) > 0
+    ]
+    total_vendido = sum(
+        t.get('amount', 0) for t in history
+        if t.get('action') in ('SELL', 'PARTIAL_SELL')
+    )
+
+    if not compras:
+        return None, None
+
+    total_comprado = sum(a for _, a in compras)
+    btc_neto = total_comprado - total_vendido
+
+    # Validar que el neto del historial coincide con el saldo real (tolerancia 20%)
+    if btc_neto <= 0 or abs(btc_neto - saldo_btc) / max(saldo_btc, 1e-8) > 0.20:
+        return None, None
+
+    avg_price = sum(p * a for p, a in compras) / total_comprado
+    total_cost = avg_price * saldo_btc
+    return avg_price, total_cost
+
+
 def guardar_estado(estado):
     try:
         with open(STATE_FILE, 'w') as f:
