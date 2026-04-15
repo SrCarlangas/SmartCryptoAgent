@@ -98,23 +98,24 @@ def reconciliar_estado(precio_actual):
 
     # Si NO hay posiciones pero SI hay BTC real: BTC huérfano → crear posicion virtual
     elif not positions and saldo_btc >= 0.0001:
-        valor_btc = saldo_btc * precio_actual
+        avg_precio, total_costo = calcular_avg_entrada_desde_historial(estado, saldo_btc)
+        if avg_precio is not None:
+            ref_nota = f"Avg ponderado desde historial: ${avg_precio:.2f}"
+        else:
+            avg_precio = precio_actual
+            total_costo = saldo_btc * precio_actual
+            ref_nota = f"Precio de mercado (historial insuficiente): ${precio_actual:.2f}"
         logger.info(
             f"🔄 RECUPERACIÓN: BTC huérfano detectado: {saldo_btc:.6f} BTC "
-            f"(≈ ${valor_btc:.2f}) sin posición virtual."
+            f"(≈ ${total_costo:.2f}) sin posición virtual."
         )
-        # Usar precio actual como referencia de entrada.
-        # No se intenta inferir el precio real de compra porque capital_inicial puede estar
-        # distorsionado por PnL realizados previos, lo que genera entradas falsamente bajas.
-        # Con entry = precio_actual, el ROI arranca en 0% y el guard MIN_PROFIT impide
-        # vender a pérdida. El agente venderá solo si el precio sube lo suficiente.
         pos_id = generar_position_id()
         new_pos = {
             'id': pos_id,
-            'entry_price': precio_actual,
+            'entry_price': avg_precio,
             'amount': saldo_btc,
             'dca_level': 0,
-            'total_invested': valor_btc,
+            'total_invested': total_costo,
             'entry_time': time.time(),
             'entry_mode': 'recovered_orphan',
             'is_orphan': True,
@@ -124,8 +125,8 @@ def reconciliar_estado(precio_actual):
         estado['positions'] = [new_pos]
         logger.warning(
             f"⚠️ Posición virtual {pos_id} creada para BTC huérfano (CONGELADA). "
-            f"Precio ref: ${precio_actual:.2f} (referencia de restart, NO el costo real). "
-            f"Se venderá automáticamente si el precio sube >0.4% desde aquí."
+            f"Entrada: {ref_nota}. "
+            f"Se venderá automáticamente vía trailing stop."
         )
         modificado = True
 
