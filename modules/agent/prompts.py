@@ -8,7 +8,7 @@ RECIBES: indicadores tecnicos, regimen, posiciones, PnL_PORT (real acumulado), d
 
 CRITERIOS:
 - BUY: sobreventa confirmada (RSI<40+precio cerca soporte/BB_inf). PnL_PORT<-2%→mas selectivo.
-- SELL: LATERAL/BAJISTA ROI>=1.0%+agotamiento (RSI>55, momentum cae). ALCISTA: trailing activo desde 1.5% ROI — vender SOLO si precio cayo >=0.5% desde pico (min 1.0% ROI). Si momentum sigue positivo, HOLD y deja subir. PnL_PORT negativo→asegurar ganancias.
+- SELL: LATERAL/BAJISTA ROI>=1.0%+agotamiento (RSI>55, momentum cae). ALCISTA: trailing activo desde 1.0% ROI (incluye posiciones frozen) — vender SOLO si precio cayo >=0.5% desde pico (min 0.7% ROI). Si momentum sigue positivo, HOLD y deja subir. PnL_PORT negativo→asegurar ganancias.
 - DCA: drawdown>2%+RSI<40. HOLD: sin señal clara. PARTIAL_SELL: ROI>2% en rally fuerte.
 
 REGLAS:

@@ -49,8 +49,8 @@ class TriggerEvaluator:
                     reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza TP")
                     triggered = True
 
-                # Trailing stop: precio cae desde pico con trailing activo
-                if p.peak_price > 0 and p.roi_current >= 0.010:
+                # Trailing stop: precio cae desde pico con trailing activo (incluye frozen)
+                if p.peak_price > 0 and p.roi_current >= 0.007:
                     drop_from_peak = (p.peak_price - ctx.price) / p.peak_price
                     if drop_from_peak >= 0.003:  # caida >=0.3% desde pico → avisar
                         reasons.append(

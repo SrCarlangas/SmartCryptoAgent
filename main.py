@@ -572,13 +572,12 @@ def main():
             ctx.recent_trades_summary = get_recent_trades_summary(estado)
             ctx.recent_decisions_summary = get_recent_decisions_summary(estado)
 
-            # Trailing stop: actualizar peak_price en posiciones activas cada ciclo.
+            # Trailing stop: actualizar peak_price en TODAS las posiciones (incluye frozen).
+            # Las frozen pueden venderse via trailing aunque no via DCA/nuevas entradas.
             # Se guarda en el estado para sobrevivir reinicios.
-            trailing_activation = REGIME_PARAMS.get(ctx.regime, {}).get('tp_pct', 0.015)
+            trailing_activation = REGIME_PARAMS.get(ctx.regime, {}).get('tp_pct', 0.010)
             peak_updated = False
             for pos_dict in estado.get('positions', []):
-                if pos_dict.get('is_frozen', False):
-                    continue
                 entry_price = pos_dict.get('entry_price', 0)
                 if entry_price <= 0:
                     continue

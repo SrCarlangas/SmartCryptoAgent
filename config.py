@@ -60,9 +60,9 @@ REGIME_PARAMS = {
         "fib_entry_low": 0.382,
         "fib_entry_high": 0.5,
         "tp_fib_extension": 1.618,
-        "tp_pct": 0.015,             # Activar trailing stop desde 1.5% ROI
+        "tp_pct": 0.010,             # Activar trailing stop desde 1.0% ROI
         "trailing_stop_pct": 0.005,  # Vender si cae 0.5% desde el pico
-        "trailing_min_exit_roi": 0.010,  # Minimo 1.0% ROI al ejecutar trailing sell
+        "trailing_min_exit_roi": 0.007,  # Minimo 0.7% ROI al ejecutar trailing sell
         "min_rr": 2.5,
         "sl_pct": 0.08,
         "position_size_factor": 1.0,
