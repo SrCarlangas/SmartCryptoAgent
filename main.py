@@ -372,6 +372,21 @@ def _ejecutar_venta_parcial(plan, precio, cooldown_counter):
         cantidad = cantidad_total
         sell_pct = 1.0
 
+    # Guard anti-fragmentación: si el restante tras el parcial vale < 2x capital mínimo,
+    # liquidar completo para evitar cascada de micro-ventas con fees desproporcionadas.
+    if 0 < sell_pct < 1.0:
+        restante_btc = pos.get('amount', 0) - cantidad
+        restante_valor = restante_btc * precio
+        if 0 < restante_valor < MIN_POSITION_CAPITAL * 2:
+            cantidad_total = _truncar_btc(pos['amount'])
+            if cantidad_total * precio >= 10.0:
+                logger.info(
+                    f"⬆️ PARTIAL→SELL [{plan.target_position_id}]: restante "
+                    f"${restante_valor:.0f} < ${MIN_POSITION_CAPITAL*2:.0f}. Liquidando completo."
+                )
+                cantidad = cantidad_total
+                sell_pct = 1.0
+
     # Verificar saldo real
     saldo_real_btc = bot.obtener_saldo_btc()
     if saldo_real_btc is not None:

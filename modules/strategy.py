@@ -176,7 +176,7 @@ class EstrategiaSmartDCA:
         # Fallback: momentum en zona media
         ema21 = float(v['EMA_21']) if not pd.isna(v['EMA_21']) else 0
         momentum = (v['close'] - v_ant['close']) / v_ant['close']
-        if 35 < rsi < 62 and rsi_sube and precio > ema21 and momentum > 0.0008:
+        if 35 < rsi < 65 and rsi_sube and precio > ema21 and momentum > 0.0008:
             logger.info(f"🚀 SEÑAL LATERAL MOMENTUM | RSI:{rsi:.1f} | Mom:{momentum*100:.3f}%")
             return True, atr, "MOMENTUM"
 
