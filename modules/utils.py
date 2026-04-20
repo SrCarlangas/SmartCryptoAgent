@@ -172,7 +172,7 @@ def registrar_trade(estado, action, price, amount, pnl=None, fee=0.0):
         'fee': fee,
     }
     estado['trade_history'].append(entry)
-    estado['trade_history'] = estado['trade_history'][-10:]
+    estado['trade_history'] = estado['trade_history'][-50:]
 
     # Acumular PnL y fees totales
     if pnl is not None:
