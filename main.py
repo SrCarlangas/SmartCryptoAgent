@@ -1,3 +1,4 @@
+import argparse
 import math
 import time
 from modules.binance_api import BinanceConnector
@@ -467,6 +468,14 @@ def _check_hard_limits(precio, cooldown_counter):
 
 
 def main():
+    parser = argparse.ArgumentParser(description="SmartCryptoAgent")
+    parser.add_argument(
+        '--sell-floor', type=float, default=None, metavar='PRECIO',
+        help='Liquida TODAS las posiciones cuando BTC >= este precio (ej: --sell-floor 76500)'
+    )
+    args = parser.parse_args()
+    sell_floor = args.sell_floor
+
     cooldown_counter = 0
     logger.info("=" * 70)
     logger.info("🤖 SmartCryptoAgent v4 — Anti-Peak-Buying Edition")
@@ -477,6 +486,8 @@ def main():
     logger.info("   ✅ Cooldown post-win: 20 ciclos / 10 min (era 2 / 1 min)")
     logger.info("   ✅ Anti-fragmentación PARTIAL_SELL: máx 2 transacciones")
     logger.info("   ✅ LATERAL MOMENTUM RSI: 35-65 (era 35-62)")
+    if sell_floor:
+        logger.info(f"   🎯 SELL FLOOR ACTIVO: ${sell_floor:,.2f} — liquidará TODO cuando BTC ≥ ese precio")
     logger.info("=" * 70)
 
     precio_inicial = None
@@ -580,6 +591,22 @@ def main():
 
             # Hard SL: siempre se evalua en cada ciclo
             cooldown_counter = _check_hard_limits(precio, cooldown_counter)
+
+            # Sell Floor: liquidar todas las posiciones si BTC >= precio objetivo
+            if sell_floor and precio >= sell_floor and has_open_positions(estado):
+                logger.info(
+                    f"🎯 SELL FLOOR ${sell_floor:,.2f} alcanzado (BTC: ${precio:,.2f}). "
+                    f"Liquidando {len(estado['positions'])} posicion(es)."
+                )
+                for pos in list(estado.get('positions', [])):
+                    sf_plan = ExecutionPlan(
+                        action="SELL", target_position_id=pos['id'],
+                        reasoning=f"Sell Floor ${sell_floor:,.2f} alcanzado (BTC ${precio:,.2f})",
+                        source="sell_floor"
+                    )
+                    cooldown_counter = _ejecutar_venta(sf_plan, precio, cooldown_counter)
+                sell_floor = None
+                logger.info("🎯 SELL FLOOR ejecutado. Parámetro desactivado.")
 
             # Obtener sentimiento (siempre, necesario para deteccion de crash)
             sentiment_score, fear_greed_raw = news.obtener_sentimiento()
