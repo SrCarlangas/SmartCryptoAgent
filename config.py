@@ -38,7 +38,7 @@ MIN_POSITION_CAPITAL = 50.0           # minimo USDT para abrir posicion
 
 # Cooldowns
 COOLDOWN_AFTER_SL = 30
-COOLDOWN_AFTER_WIN = 2
+COOLDOWN_AFTER_WIN = 20
 
 # --- Deteccion de Regimen ---
 REGIME_ADX_TREND = 25       # ADX > esto = tendencia

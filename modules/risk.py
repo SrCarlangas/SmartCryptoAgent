@@ -93,6 +93,23 @@ class RiskManager:
             if ctx.price_vs_ema50_1h < -0.05:
                 return False, f"Filtro macro 1H: precio {ctx.price_vs_ema50_1h*100:.1f}% bajo EMA50_1h"
 
+        # Regla 7b: Peak Guard — no comprar dentro del 1% del máximo de 48h
+        if action == "BUY" and ctx.swing_high > 0:
+            dist_to_swing_high = (ctx.swing_high - ctx.price) / ctx.swing_high
+            if dist_to_swing_high < 0.010:
+                return False, (
+                    f"Peak Guard: P:{ctx.price:.0f} a {dist_to_swing_high*100:.2f}% "
+                    f"de swing_high_48h:{ctx.swing_high:.0f}"
+                )
+
+        # Regla 7c: ADX 1h bajista bloquea nuevas entradas
+        if action == "BUY" and ctx.adx_1h > 20 and ctx.plus_di_1h > 0 and ctx.minus_di_1h > 0:
+            if ctx.minus_di_1h > ctx.plus_di_1h + 5:
+                return False, (
+                    f"ADX 1h bajista: -DI:{ctx.minus_di_1h:.1f} > +DI:{ctx.plus_di_1h:.1f} "
+                    f"(ADX:{ctx.adx_1h:.1f})"
+                )
+
         # Regla 8: Reserva USDT minima (adaptativa por regimen)
         if action in ("BUY", "DCA"):
             alloc = decision.suggested_allocation_pct or 0.10

@@ -102,7 +102,7 @@ class EstrategiaSmartDCA:
         ema21 = float(ema21_val) if not pd.isna(ema21_val) else 0
         momentum = (v['close'] - df.iloc[-3]['close']) / df.iloc[-3]['close']
 
-        if ema21 > 0 and rsi > 35 and rsi < 65 and rsi > rsi_prev and precio > ema21 and momentum > 0.0008 and macro_ok:
+        if ema21 > 0 and rsi > 35 and rsi < 55 and rsi > rsi_prev and precio > ema21 and momentum > 0.0008 and macro_ok:
             logger.info(f"🚀 SEÑAL ALCISTA MOMENTUM | RSI:{rsi:.1f} | P:{precio:.2f} > EMA21:{ema21:.2f}")
             return True, atr, "MOMENTUM"
 
