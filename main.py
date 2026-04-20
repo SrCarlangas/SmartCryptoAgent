@@ -719,10 +719,24 @@ def main():
                 _ejecutar_dca(plan, precio)
 
             elif plan.action == "SELL" and plan.target_position_id:
-                cooldown_counter = _ejecutar_venta(plan, precio, cooldown_counter)
+                _pos = get_position_by_id(estado, plan.target_position_id)
+                if sell_floor and _pos and _pos.get('is_frozen'):
+                    logger.info(
+                        f"🎯 Sell Floor ${sell_floor:,.2f} activo — bloqueando SELL de huérfana "
+                        f"[{plan.target_position_id}] (BTC ${precio:,.2f} < floor)"
+                    )
+                else:
+                    cooldown_counter = _ejecutar_venta(plan, precio, cooldown_counter)
 
             elif plan.action == "PARTIAL_SELL" and plan.target_position_id:
-                cooldown_counter = _ejecutar_venta_parcial(plan, precio, cooldown_counter)
+                _pos = get_position_by_id(estado, plan.target_position_id)
+                if sell_floor and _pos and _pos.get('is_frozen'):
+                    logger.info(
+                        f"🎯 Sell Floor ${sell_floor:,.2f} activo — bloqueando PARTIAL_SELL de huérfana "
+                        f"[{plan.target_position_id}] (BTC ${precio:,.2f} < floor)"
+                    )
+                else:
+                    cooldown_counter = _ejecutar_venta_parcial(plan, precio, cooldown_counter)
 
             time.sleep(PAUSA)
 
