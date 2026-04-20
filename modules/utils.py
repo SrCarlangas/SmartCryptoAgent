@@ -110,6 +110,36 @@ def calcular_avg_entrada_desde_historial(estado, saldo_btc):
     return avg_price, total_cost
 
 
+def calcular_avg_entrada_desde_binance(trades_exchange, saldo_btc):
+    """
+    Calcula precio promedio real desde historial de Binance (fetch_my_trades).
+    Usado como fallback cuando trade_history local está vacío (ej: estado reseteado).
+    """
+    if not trades_exchange:
+        return None, None
+
+    compras = [
+        (t['price'], t['amount'])
+        for t in trades_exchange if t.get('side') == 'buy' and t.get('amount', 0) > 0
+    ]
+    total_vendido = sum(
+        t.get('amount', 0) for t in trades_exchange if t.get('side') == 'sell'
+    )
+
+    if not compras:
+        return None, None
+
+    total_comprado = sum(a for _, a in compras)
+    btc_neto = total_comprado - total_vendido
+
+    if btc_neto <= 0 or abs(btc_neto - saldo_btc) / max(saldo_btc, 1e-8) > 0.25:
+        return None, None
+
+    avg_price = sum(p * a for p, a in compras) / total_comprado
+    total_cost = avg_price * saldo_btc
+    return avg_price, total_cost
+
+
 def guardar_estado(estado):
     try:
         with open(STATE_FILE, 'w') as f:

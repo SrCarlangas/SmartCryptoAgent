@@ -109,6 +109,24 @@ class BinanceConnector:
             logger.warning(f"⚠️ Error obteniendo saldo USDT: {e}")
             return None
 
+    def obtener_historial_compras(self, symbol, limit=200):
+        """Retorna trades BUY+SELL reales de Binance para calcular precio promedio."""
+        try:
+            trades = self._reintentar(
+                self.exchange.fetch_my_trades, symbol, limit=limit
+            )
+            return [
+                {
+                    'price': float(t['price']),
+                    'amount': float(t['amount']),
+                    'side': t['side'],
+                }
+                for t in trades if t.get('price') and t.get('amount')
+            ]
+        except Exception as e:
+            logger.warning(f"⚠️ Error obteniendo historial Binance: {e}")
+            return []
+
     def obtener_velas(self, symbol, timeframe='1h', limit=200):
         """Descarga el historial de precios (OHLCV) necesario para los indicadores"""
         try:

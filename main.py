@@ -12,6 +12,7 @@ from modules.utils import (
     get_position_by_id, remove_position,
     registrar_decision_agente, registrar_trade, get_recent_trades_summary,
     get_recent_decisions_summary, calcular_avg_entrada_desde_historial,
+    calcular_avg_entrada_desde_binance,
 )
 from modules.logger import logger
 from modules.market_data import build_market_context
@@ -101,11 +102,16 @@ def reconciliar_estado(precio_actual):
     elif not positions and saldo_btc >= 0.0001:
         avg_precio, total_costo = calcular_avg_entrada_desde_historial(estado, saldo_btc)
         if avg_precio is not None:
-            ref_nota = f"Avg ponderado desde historial: ${avg_precio:.2f}"
+            ref_nota = f"Avg ponderado desde historial local: ${avg_precio:.2f}"
         else:
-            avg_precio = precio_actual
-            total_costo = saldo_btc * precio_actual
-            ref_nota = f"Precio de mercado (historial insuficiente): ${precio_actual:.2f}"
+            trades_exchange = bot.obtener_historial_compras(SYMBOL)
+            avg_precio, total_costo = calcular_avg_entrada_desde_binance(trades_exchange, saldo_btc)
+            if avg_precio is not None:
+                ref_nota = f"Avg real desde Binance API: ${avg_precio:.2f}"
+            else:
+                avg_precio = precio_actual
+                total_costo = saldo_btc * precio_actual
+                ref_nota = f"⚠️ PRECIO DE MERCADO (historial insuficiente): ${precio_actual:.2f} — ENTRADA PUEDE SER INCORRECTA"
         logger.info(
             f"🔄 RECUPERACIÓN: BTC huérfano detectado: {saldo_btc:.6f} BTC "
             f"(≈ ${total_costo:.2f}) sin posición virtual."
@@ -556,11 +562,16 @@ def main():
                         estado, saldo_real_btc
                     )
                     if avg_precio is not None:
-                        ref_nota = f"Avg desde historial: ${avg_precio:.2f}"
+                        ref_nota = f"Avg desde historial local: ${avg_precio:.2f}"
                     else:
-                        avg_precio = precio
-                        total_costo = saldo_real_btc * precio
-                        ref_nota = f"Avg de mercado (historial insuficiente): ${precio:.2f}"
+                        trades_exchange = bot.obtener_historial_compras(SYMBOL)
+                        avg_precio, total_costo = calcular_avg_entrada_desde_binance(trades_exchange, saldo_real_btc)
+                        if avg_precio is not None:
+                            ref_nota = f"Avg real desde Binance API: ${avg_precio:.2f}"
+                        else:
+                            avg_precio = precio
+                            total_costo = saldo_real_btc * precio
+                            ref_nota = f"⚠️ PRECIO DE MERCADO (historial insuficiente): ${precio:.2f} — ENTRADA PUEDE SER INCORRECTA"
                     pos_id = generar_position_id()
                     new_pos = {
                         'id': pos_id,
