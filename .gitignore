@@ -6,6 +6,7 @@ venv/
 
 # Archivos de estado locales
 state.json
+bot_state.json
 __pycache__/
 
 # archivo temporal
@@ -14,6 +15,3 @@ binancekey.txt
 #logs
 bot.log
 botHist.log
-
-#Estado
-bot_state.json
