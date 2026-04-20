@@ -468,10 +468,16 @@ def _check_hard_limits(precio, cooldown_counter):
 
 def main():
     cooldown_counter = 0
-    logger.info(
-        f"🤖 AGENTE ADAPTATIVO (modo: {AGENT_MODE}) "
-        f"| Hard SL: -{HARD_STOP_LOSS_PCT*100:.0f}% | Regimenes: ALCISTA/BAJISTA/LATERAL/CRASH"
-    )
+    logger.info("=" * 70)
+    logger.info("🤖 SmartCryptoAgent v4 — Anti-Peak-Buying Edition")
+    logger.info(f"   Modo: {AGENT_MODE} | Hard SL: -{HARD_STOP_LOSS_PCT*100:.0f}%")
+    logger.info("   ✅ Peak Guard: bloquea BUY si precio <1% del swing_high 48h")
+    logger.info("   ✅ ADX Filter: bloquea BUY si 1h -DI > +DI + 5 pts (bajista)")
+    logger.info("   ✅ ALCISTA MOMENTUM RSI: 35-55 (era 35-65)")
+    logger.info("   ✅ Cooldown post-win: 20 ciclos / 10 min (era 2 / 1 min)")
+    logger.info("   ✅ Anti-fragmentación PARTIAL_SELL: máx 2 transacciones")
+    logger.info("   ✅ LATERAL MOMENTUM RSI: 35-65 (era 35-62)")
+    logger.info("=" * 70)
 
     precio_inicial = None
     for _ in range(5):
