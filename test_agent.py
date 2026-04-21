@@ -69,7 +69,7 @@ def test_prompts():
     assert "0/5" in prompt
     assert "REGIME:LATERAL" in prompt
     assert "W_RSI:55.0" in prompt
-    assert "FNG:35" in prompt
+    assert "W_RSI:55.0" in prompt  # FNG/sentiment removed
     assert "REC" not in prompt  # no recommendation passed
 
     # Con recomendacion pre-calculada
@@ -208,10 +208,10 @@ def test_scaled_exits():
     exits2 = est.evaluar_salidas_escalonadas(pos2, 81000, 55, "ALCISTA", 50)
     assert not any(e[0] == "roi_pct_0.3" for e in exits2), "Already taken exit should not trigger again"
 
-    # ALCISTA: RSI > 70 partial sell
+    # ALCISTA: RSI > 75 partial sell
     pos3 = PositionSummary(id="pos_3", entry_price=80000, amount=0.05, roi_current=0.05)
-    exits3 = est.evaluar_salidas_escalonadas(pos3, 84000, 72, "ALCISTA", 50)
-    assert any(e[0] == "rsi_70_sell" for e in exits3), "RSI > 70 should trigger partial sell"
+    exits3 = est.evaluar_salidas_escalonadas(pos3, 84000, 76, "ALCISTA", 50)
+    assert any(e[0] == "rsi_75_sell" for e in exits3), "RSI > 75 should trigger partial sell"
 
     # ALCISTA: weekly RSI > 75
     exits4 = est.evaluar_salidas_escalonadas(pos, 81000, 55, "ALCISTA", 78)
@@ -434,7 +434,7 @@ def test_market_data_builder():
         'usdt_disponible': 3400.0,
     }
 
-    ctx = build_market_context(velas_15m, velas_1h, velas_1w, 84250.0, -0.30, 35, estado, 4404.0)
+    ctx = build_market_context(velas_15m, velas_1h, velas_1w, 84250.0, estado, 4404.0)
 
     assert ctx.num_positions == 2
     assert len(ctx.positions) == 2
