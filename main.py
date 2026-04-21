@@ -2,7 +2,6 @@ import argparse
 import math
 import time
 from modules.binance_api import BinanceConnector
-from modules.sentiment import NewsAnalyzer
 from modules.strategy import EstrategiaSmartDCA
 from modules.risk import RiskManager
 from modules.regime import RegimeDetector
@@ -30,7 +29,6 @@ from config import (
 )
 
 bot = BinanceConnector()
-news = NewsAnalyzer()
 estrategia = EstrategiaSmartDCA()
 risk_manager = RiskManager()
 trigger_eval = TriggerEvaluator()
@@ -619,9 +617,6 @@ def main():
                 sell_floor = None
                 logger.info("🎯 SELL FLOOR ejecutado. Parámetro desactivado.")
 
-            # Obtener sentimiento (siempre, necesario para deteccion de crash)
-            sentiment_score, fear_greed_raw = news.obtener_sentimiento()
-
             # Obtener velas
             velas_15m = bot.obtener_velas(SYMBOL, timeframe=TIMEFRAME, limit=CANDLES_15M)
             velas_1h = bot.obtener_velas(SYMBOL, timeframe=TIMEFRAME_TREND, limit=CANDLES_1H)
@@ -634,7 +629,7 @@ def main():
             # Construir contexto con todos los indicadores
             ctx = build_market_context(
                 velas_15m, velas_1h, velas_1w,
-                precio, sentiment_score, fear_greed_raw,
+                precio,
                 estado, balance_total
             )
             ctx.cooldown_active = cooldown_counter > 0
@@ -692,7 +687,7 @@ def main():
                             f"P:{precio:.2f} | Avg:{pos['entry_price']:.2f} | ROI:{roi*100:.2f}%"
                         )
                 else:
-                    logger.info(f"👀 Escaneando | P:{precio:.2f} | Sent:{sentiment_score:.2f} | Posiciones: 0")
+                    logger.info(f"👀 Escaneando | P:{precio:.2f} | Posiciones: 0")
 
                 trigger_eval.force_update(ctx)
                 time.sleep(PAUSA)

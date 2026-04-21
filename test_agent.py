@@ -17,7 +17,6 @@ def test_models():
     assert ctx.available_slots == 0
     assert ctx.positions == []
     assert ctx.regime == "LATERAL"
-    assert ctx.fear_greed_raw == 50
     assert ctx.rsi_weekly == 50.0
     assert ctx.usdt_reserve_pct == 0.0
 
@@ -60,11 +59,10 @@ def test_prompts():
         price=84250.0, rsi_14=36.2, rsi_prev=38.0,
         bb_lower=83900.0, bb_mid=84500.0, bb_upper=85100.0,
         ema_21=84100.0, atr_14=320.0, adx_14=28.5, volume_ratio=1.2,
-        sentiment_score=-0.30, sentiment_label="Fear",
         balance_total=4404.0, usdt_disponible=4404.0,
         num_positions=0, available_slots=5,
         regime="LATERAL", regime_confidence=0.67,
-        rsi_weekly=55.0, fear_greed_raw=35,
+        rsi_weekly=55.0,
     )
     prompt = build_analysis_prompt(ctx)
     assert "VACIO" in prompt
@@ -118,7 +116,6 @@ def test_regime_detection():
         price=85000, ema_50_1h=84000, ema_200_1h=82000,
         adx_1h=30, plus_di_1h=35, minus_di_1h=15,
         rsi_weekly=65, price_change_24h=0.02, volume_ratio=1.0,
-        fear_greed_raw=55,
     )
     result = rd.detect(ctx_bull)
     assert result.regime == "ALCISTA", f"Expected ALCISTA, got {result.regime}"
@@ -129,7 +126,6 @@ def test_regime_detection():
         price=78000, ema_50_1h=80000, ema_200_1h=82000,
         adx_1h=30, plus_di_1h=12, minus_di_1h=35,
         rsi_weekly=35, price_change_24h=-0.03, volume_ratio=1.0,
-        fear_greed_raw=30,
     )
     result_bear = rd.detect(ctx_bear)
     assert result_bear.regime == "BAJISTA", f"Expected BAJISTA, got {result_bear.regime}"
@@ -139,7 +135,6 @@ def test_regime_detection():
         price=84000, ema_50_1h=83500, ema_200_1h=84500,
         adx_1h=15, plus_di_1h=20, minus_di_1h=18,
         rsi_weekly=50, price_change_24h=0.001, volume_ratio=0.8,
-        fear_greed_raw=45,
     )
     result_lat = rd.detect(ctx_lat)
     assert result_lat.regime == "LATERAL", f"Expected LATERAL, got {result_lat.regime}"
@@ -149,7 +144,6 @@ def test_regime_detection():
         price=75000, ema_50_1h=83000, ema_200_1h=85000,
         adx_1h=40, plus_di_1h=10, minus_di_1h=45,
         rsi_weekly=25, price_change_24h=-0.12, volume_ratio=3.0,
-        fear_greed_raw=10,
     )
     result_crash = rd.detect(ctx_crash)
     assert result_crash.regime == "CRASH", f"Expected CRASH, got {result_crash.regime}"
@@ -159,7 +153,7 @@ def test_regime_detection():
     ctx_no_ema = MarketContext(
         price=84000, ema_50_1h=83000, ema_200_1h=0,
         adx_1h=15, rsi_weekly=50,
-        price_change_24h=0, volume_ratio=1.0, fear_greed_raw=50,
+        price_change_24h=0, volume_ratio=1.0,
     )
     result_no = rd.detect(ctx_no_ema)
     assert result_no.regime == "LATERAL"
@@ -263,23 +257,23 @@ def test_trigger_evaluator():
     te = TriggerEvaluator()
 
     # Primera llamada: inicializacion
-    ctx = MarketContext(price=84000.0, rsi_14=50.0, sentiment_score=0.0, available_slots=5, regime="LATERAL")
+    ctx = MarketContext(price=84000.0, rsi_14=50.0, available_slots=5, regime="LATERAL")
     te.last_call_time = time.time() - 120
     assert te.should_call_agent(ctx) is True
 
     # Rate limited
-    ctx2 = MarketContext(price=84010.0, rsi_14=50.0, sentiment_score=0.0, available_slots=5, regime="LATERAL")
+    ctx2 = MarketContext(price=84010.0, rsi_14=50.0, available_slots=5, regime="LATERAL")
     assert te.should_call_agent(ctx2) is False
 
     # Cambio de regimen
     te.last_call_time = time.time() - 120
-    ctx3 = MarketContext(price=84000.0, rsi_14=50.0, sentiment_score=0.0, available_slots=5, regime="ALCISTA")
+    ctx3 = MarketContext(price=84000.0, rsi_14=50.0, available_slots=5, regime="ALCISTA")
     assert te.should_call_agent(ctx3) is True
 
     # Con posicion en TP
     te.last_call_time = time.time() - 120
     ctx4 = MarketContext(
-        price=84000.0, rsi_14=50.0, sentiment_score=0.0,
+        price=84000.0, rsi_14=50.0,
         num_positions=1, available_slots=4, regime="LATERAL",
         positions=[PositionSummary(id="pos_1", roi_current=0.02)]
     )
@@ -295,14 +289,14 @@ def test_risk_guardian():
     rm = RiskManager()
 
     # BUY sin slots
-    ctx = MarketContext(balance_total=5000, sentiment_score=0.0, available_slots=0, num_positions=5)
+    ctx = MarketContext(balance_total=5000, available_slots=0, num_positions=5)
     d = TradingDecision(action="BUY")
     ok, _ = rm.validate_decision(d, ctx)
     assert not ok, "Deberia vetar BUY sin slots"
 
     # BUY con slots (ahora necesita reserva 30%)
     ctx2 = MarketContext(
-        balance_total=5000, sentiment_score=0.0, available_slots=3,
+        balance_total=5000, available_slots=3,
         num_positions=2, total_invested=1000, price=84000,
         ema_50_1h=83000, price_vs_ema50_1h=0.012,
         usdt_disponible=3500,  # 70% disponible
@@ -313,7 +307,7 @@ def test_risk_guardian():
 
     # BUY que deja sin reserva
     ctx_low = MarketContext(
-        balance_total=5000, sentiment_score=0.0, available_slots=3,
+        balance_total=5000, available_slots=3,
         num_positions=2, total_invested=2500, price=84000,
         ema_50_1h=83000, price_vs_ema50_1h=0.012,
         usdt_disponible=1600,  # 32%
@@ -324,7 +318,7 @@ def test_risk_guardian():
 
     # DCA con posicion invalida
     ctx3 = MarketContext(
-        balance_total=5000, sentiment_score=0.0, available_slots=3,
+        balance_total=5000, available_slots=3,
         positions=[PositionSummary(id="pos_1", dca_level=0)],
         total_invested=500, usdt_disponible=4000,
     )
@@ -339,7 +333,7 @@ def test_risk_guardian():
 
     # DCA nivel maximo (ahora 5)
     ctx4 = MarketContext(
-        balance_total=5000, sentiment_score=0.0,
+        balance_total=5000,
         positions=[PositionSummary(id="pos_1", dca_level=5)],
         total_invested=500, usdt_disponible=4000,
     )
@@ -367,7 +361,7 @@ def test_risk_guardian():
 
     # Regla 9: PnL portafolio bloquea compras cuando pérdida > 5%
     ctx_loss = MarketContext(
-        balance_total=4700, sentiment_score=0.0, available_slots=3,
+        balance_total=4700, available_slots=3,
         num_positions=0, total_invested=0, price=84000,
         ema_50_1h=83000, price_vs_ema50_1h=0.012,
         usdt_disponible=4700,
@@ -382,7 +376,7 @@ def test_risk_guardian():
 
     # PnL negativo pero dentro de límite: debe permitir
     ctx_ok = MarketContext(
-        balance_total=4850, sentiment_score=0.0, available_slots=3,
+        balance_total=4850, available_slots=3,
         num_positions=0, total_invested=0, price=84000,
         ema_50_1h=83000, price_vs_ema50_1h=0.012,
         usdt_disponible=4850,
@@ -450,7 +444,6 @@ def test_market_data_builder():
     assert ctx.available_slots == 3
     assert ctx.positions[0].roi_current > 0  # 84250 > 83000
     assert ctx.positions[1].roi_current < 0  # 84250 < 85000
-    assert ctx.fear_greed_raw == 35
     assert ctx.usdt_reserve_pct > 0
     assert ctx.bb_upper > 0  # new field
     assert ctx.plus_di >= 0  # new field

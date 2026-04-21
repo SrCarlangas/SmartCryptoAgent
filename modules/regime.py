@@ -5,7 +5,7 @@ from modules.logger import logger
 from config import (
     REGIME_ADX_TREND, REGIME_ADX_LATERAL,
     REGIME_WEEKLY_RSI_BULL, REGIME_WEEKLY_RSI_BEAR,
-    CRASH_DROP_24H, CRASH_VOLUME_RATIO, CRASH_FNG_MAX,
+    CRASH_DROP_24H, CRASH_VOLUME_RATIO,
 )
 
 
@@ -31,7 +31,7 @@ class RegimeDetector:
                 regime="CRASH", confidence=1.0,
                 ema_signal="", adx_signal="", rsi_signal="",
                 is_crash=True,
-                details=f"Crash: 24h={ctx.price_change_24h*100:.1f}% Vol={ctx.volume_ratio:.1f}x FnG={ctx.fear_greed_raw}"
+                details=f"Crash: 24h={ctx.price_change_24h*100:.1f}% Vol={ctx.volume_ratio:.1f}x"
             )
 
         # 2. Tres senales independientes
@@ -47,11 +47,10 @@ class RegimeDetector:
         return RegimeResult(regime, confidence, ema_sig, adx_sig, rsi_sig, False, details)
 
     def _check_crash(self, ctx: MarketContext) -> bool:
-        """Crash: caida >10% en 24h + volumen extremo + Fear&Greed < 20."""
+        """Crash: caida >10% en 24h + volumen extremo."""
         return (
             ctx.price_change_24h < CRASH_DROP_24H
             and ctx.volume_ratio > CRASH_VOLUME_RATIO
-            and ctx.fear_greed_raw < CRASH_FNG_MAX
         )
 
     def _ema_signal(self, ctx: MarketContext) -> str:

@@ -9,29 +9,15 @@ from config import MAX_CONCURRENT_POSITIONS, REGIME_PARAMS
 
 def build_market_context(
     velas_15m, velas_1h, velas_1w,
-    precio, sentiment_score, fear_greed_raw,
+    precio,
     estado, balance_total
 ) -> MarketContext:
     """Empaqueta datos crudos de Binance + indicadores en MarketContext."""
     ctx = MarketContext()
     ctx.price = precio
-    ctx.sentiment_score = sentiment_score
-    ctx.fear_greed_raw = fear_greed_raw
     ctx.balance_total = balance_total
     ctx.usdt_disponible = estado.get('usdt_disponible', 0.0)
     ctx.usdt_reserve_pct = ctx.usdt_disponible / ctx.balance_total if ctx.balance_total > 0 else 1.0
-
-    # Sentiment label
-    if sentiment_score < -0.6:
-        ctx.sentiment_label = "Extreme Fear"
-    elif sentiment_score < -0.2:
-        ctx.sentiment_label = "Fear"
-    elif sentiment_score < 0.2:
-        ctx.sentiment_label = "Neutral"
-    elif sentiment_score < 0.6:
-        ctx.sentiment_label = "Greed"
-    else:
-        ctx.sentiment_label = "Extreme Greed"
 
     # Multi-position state (excluir posiciones congeladas del motor de decisiones)
     positions = estado.get('positions', [])

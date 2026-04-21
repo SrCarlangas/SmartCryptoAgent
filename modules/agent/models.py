@@ -63,11 +63,6 @@ class MarketContext:
     # Semanal
     rsi_weekly: float = 50.0
 
-    # Sentimiento
-    sentiment_score: float = 0.0
-    sentiment_label: str = ""
-    fear_greed_raw: int = 50
-
     # Regimen
     regime: str = "LATERAL"
     regime_confidence: float = 0.0

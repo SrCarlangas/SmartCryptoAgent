@@ -10,7 +10,6 @@ class TriggerEvaluator:
     def __init__(self):
         self.last_call_time = 0.0
         self.last_rsi = 50.0
-        self.last_sentiment = 0.0
         self.last_price = 0.0
         self.last_price_trigger_time = 0.0
         self.last_regime = "LATERAL"
@@ -101,11 +100,6 @@ class TriggerEvaluator:
                 reasons.append("Precio cruzo BB inferior")
                 triggered = True
 
-            # Cambio significativo de sentimiento
-            if abs(ctx.sentiment_score - self.last_sentiment) > 0.2:
-                reasons.append(f"Sentimiento cambio {self.last_sentiment:.2f}->{ctx.sentiment_score:.2f}")
-                triggered = True
-
             # Cambio de precio significativo (>0.5%) con cooldown de 2 min
             if self.last_price > 0:
                 price_change = abs(ctx.price - self.last_price) / self.last_price
@@ -133,12 +127,10 @@ class TriggerEvaluator:
     def _update_state(self, ctx: MarketContext):
         self.last_call_time = time.time()
         self.last_rsi = ctx.rsi_14
-        self.last_sentiment = ctx.sentiment_score
         self.last_price = ctx.price
         self.last_regime = ctx.regime
 
     def force_update(self, ctx: MarketContext):
         self.last_rsi = ctx.rsi_14
-        self.last_sentiment = ctx.sentiment_score
         self.last_price = ctx.price
         self.last_regime = ctx.regime

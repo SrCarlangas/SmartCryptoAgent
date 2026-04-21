@@ -64,10 +64,6 @@ class RiskManager:
             if decision.sell_pct <= 0 or decision.sell_pct >= 1.0:
                 return False, f"sell_pct invalido ({decision.sell_pct}) para PARTIAL_SELL"
 
-        # Regla 4: Panico absoluto bloquea compras
-        if action in ("BUY", "DCA") and ctx.sentiment_score < -0.95:
-            return False, f"Panico absoluto (sentiment={ctx.sentiment_score:.2f})"
-
         # Regla 5: Exposicion total maxima (adaptativa por regimen)
         if action in ("BUY", "DCA"):
             alloc = decision.suggested_allocation_pct or 0.10
