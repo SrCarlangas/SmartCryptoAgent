@@ -62,6 +62,18 @@ class AgentOrchestrator:
                     f"(conf:{agent_decision.confidence:.2f}) | {agent_decision.reasoning}"
                 )
 
+            # ALCISTA: si reglas=BUY y agente=HOLD con baja conviccion (<0.75), confiar en las reglas.
+            # El agente tiene sesgo hacia "esperar sobreventa" que no aplica en tendencia alcista.
+            if (ctx.regime == "ALCISTA"
+                    and rules_decision.action == "BUY"
+                    and agent_decision.action == "HOLD"
+                    and agent_decision.confidence < 0.75):
+                logger.info(
+                    f"📐 ALCISTA trust-rules: agente HOLD conf:{agent_decision.confidence:.2f} < 0.75 "
+                    f"→ ejecutando BUY de reglas"
+                )
+                agent_decision = rules_decision
+
             # Si el agente confirma la accion de reglas, copiar parametros pre-calculados
             if agent_decision.action == rules_decision.action and rules_decision.action != "HOLD":
                 agent_decision.target_position_id = (

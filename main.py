@@ -665,9 +665,11 @@ def main():
             ctx.regime = regime_result.regime
             ctx.regime_confidence = regime_result.confidence
 
-            # Actualizar slots disponibles segun regimen (limites adaptativos)
-            from config import REGIME_PARAMS as _rp
-            regime_max_pos = _rp.get(ctx.regime, {}).get("max_positions", MAX_CONCURRENT_POSITIONS)
+            # Actualizar slots disponibles segun regimen (limites adaptativos + escala por capital)
+            from config import REGIME_PARAMS as _rp, CAPITAL_PER_SLOT
+            regime_abs_cap = _rp.get(ctx.regime, {}).get("max_positions", MAX_CONCURRENT_POSITIONS)
+            dynamic_max = max(1, int(balance_total / CAPITAL_PER_SLOT))
+            regime_max_pos = min(dynamic_max, regime_abs_cap)
             ctx.available_slots = max(0, regime_max_pos - ctx.num_positions)
 
             logger.info(

@@ -34,11 +34,12 @@ MAX_DCA_LEVELS = 5                 # maximo niveles DCA por posicion
 
 # Capital
 MAX_CAPITAL_PER_POSITION_PCT = 0.25  # 25% del balance por posicion
-MIN_POSITION_CAPITAL = 50.0           # minimo USDT para abrir posicion
+MIN_POSITION_CAPITAL = 150.0          # minimo USDT para abrir posicion (fees: $0.30 round-trip → necesita margen real)
+CAPITAL_PER_SLOT = 800.0              # capital minimo por slot antes de añadir otro (escala dinamica de posiciones)
 
 # Cooldowns
 COOLDOWN_AFTER_SL = 30
-COOLDOWN_AFTER_WIN = 20
+COOLDOWN_AFTER_WIN = 5
 
 # --- Deteccion de Regimen ---
 REGIME_ADX_TREND = 25       # ADX > esto = tendencia
@@ -65,8 +66,8 @@ REGIME_PARAMS = {
         "trailing_min_exit_roi": 0.007,  # Minimo 0.7% ROI al ejecutar trailing sell
         "min_rr": 2.5,
         "sl_pct": 0.08,
-        "position_size_factor": 1.0,
-        "max_positions": 5,          # muchas posiciones, mercado favorable
+        "position_size_factor": 1.5, # posiciones ~15% del capital
+        "max_positions": 10,         # cap absoluto — numero real calculado dinamicamente por capital
         "max_exposure": 0.70,        # hasta 70% desplegado
         "min_reserve": 0.30,         # 30% reserva
         "dca_table": [(40, 2.0), (50, 0.5), (65, 0.0)],
@@ -92,7 +93,7 @@ REGIME_PARAMS = {
         "sl_pct": 0.05,
         "tp_pct": 0.015,
         "position_size_factor": 1.2,     # posiciones 12% para superar drag de fees
-        "max_positions": 3,              # posiciones moderadas
+        "max_positions": 6,              # cap absoluto — numero real calculado dinamicamente por capital
         "max_exposure": 0.65,            # 65% max
         "min_reserve": 0.35,             # 35% reserva
         "buy_rsi_max": 40,
