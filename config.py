@@ -35,7 +35,7 @@ MAX_DCA_LEVELS = 5                 # maximo niveles DCA por posicion
 # Capital
 MAX_CAPITAL_PER_POSITION_PCT = 0.25  # 25% del balance por posicion
 MIN_POSITION_CAPITAL = 150.0          # minimo USDT para abrir posicion (fees: $0.30 round-trip → necesita margen real)
-CAPITAL_PER_SLOT = 800.0              # capital minimo por slot antes de añadir otro (escala dinamica de posiciones)
+CAPITAL_PER_SLOT = 650.0              # capital minimo por slot antes de añadir otro (escala dinamica de posiciones)
 
 # Cooldowns
 COOLDOWN_AFTER_SL = 30
