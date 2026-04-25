@@ -484,10 +484,10 @@ def main():
     logger.info("=" * 70)
     logger.info("🤖 SmartCryptoAgent v4 — Anti-Peak-Buying Edition")
     logger.info(f"   Modo: {AGENT_MODE} | Hard SL: -{HARD_STOP_LOSS_PCT*100:.0f}%")
-    logger.info("   ✅ Peak Guard: bloquea BUY si precio <1% del swing_high 48h")
+    logger.info("   ✅ Peak Guard: bloquea BUY si precio <1.5% del swing_high 48h")
     logger.info("   ✅ ADX Filter: bloquea BUY si 1h -DI > +DI + 5 pts (bajista)")
     logger.info("   ✅ ALCISTA MOMENTUM RSI: 35-55 (era 35-65)")
-    logger.info("   ✅ Cooldown post-win: 20 ciclos / 10 min (era 2 / 1 min)")
+    logger.info("   ✅ Cooldown post-win: 5 ciclos / 2.5 min (era 20 / 10 min)")
     logger.info("   ✅ Anti-fragmentación PARTIAL_SELL: máx 2 transacciones")
     logger.info("   ✅ LATERAL MOMENTUM RSI: 35-65 (era 35-62)")
     if sell_floor:

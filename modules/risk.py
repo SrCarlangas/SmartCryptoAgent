@@ -92,7 +92,7 @@ class RiskManager:
         # Regla 7b: Peak Guard — no comprar dentro del 1% del máximo de 48h
         if action == "BUY" and ctx.swing_high > 0:
             dist_to_swing_high = (ctx.swing_high - ctx.price) / ctx.swing_high
-            if dist_to_swing_high < 0.010:
+            if dist_to_swing_high < 0.015:
                 return False, (
                     f"Peak Guard: P:{ctx.price:.0f} a {dist_to_swing_high*100:.2f}% "
                     f"de swing_high_48h:{ctx.swing_high:.0f}"
