@@ -53,6 +53,18 @@ class AgentOrchestrator:
 
             if agent_decision.source in ("rules_api_failure", "rules_llm_failure"):
                 logger.info(f"🔄 LLM no disponible, usando reglas directamente")
+                approved, veto_reason = self.risk_manager.validate_decision(rules_decision, ctx)
+                if not approved:
+                    self._consecutive_vetos += 1
+                    self._last_veto_action = rules_decision.action
+                    logger.info(
+                        f"🛡️ RISK GUARDIAN VETO ({self._consecutive_vetos}x): {veto_reason}"
+                    )
+                    plan.vetoed = True
+                    plan.veto_reason = veto_reason
+                    return plan
+                self._consecutive_vetos = 0
+                self._last_veto_action = ""
                 return self._decision_to_plan(rules_decision, ctx)
 
             # Log si el agente difiere de las reglas
@@ -136,6 +148,13 @@ class AgentOrchestrator:
             agent_decision = self._get_agent_decision(ctx, rules_decision)
 
             if agent_decision.source in ("rules_api_failure", "rules_llm_failure"):
+                logger.info(f"🔄 LLM no disponible, usando reglas directamente")
+                approved, veto_reason = self.risk_manager.validate_decision(rules_decision, ctx)
+                if not approved:
+                    logger.info(f"🛡️ RISK GUARDIAN VETO: {veto_reason}")
+                    plan.vetoed = True
+                    plan.veto_reason = veto_reason
+                    return plan
                 return self._decision_to_plan(rules_decision, ctx)
 
             # Bloquear SELL con ROI < MIN_PROFIT (excepto stop-loss)

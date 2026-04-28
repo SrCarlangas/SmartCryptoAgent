@@ -24,7 +24,7 @@ from config import (
     TAKE_PROFIT_PCT, STOP_LOSS_GLOBAL_PCT, HARD_STOP_LOSS_PCT,
     DCA_NIVEL_1_DROP, DCA_NIVEL_2_DROP,
     MAX_PORTFOLIO_EXPOSURE, COOLDOWN_AFTER_SL, COOLDOWN_AFTER_WIN,
-    AGENT_MODE, MIN_POSITION_CAPITAL,
+    AGENT_MODE, MIN_POSITION_CAPITAL, MIN_DCA_CAPITAL,
     MAX_CONCURRENT_POSITIONS, REGIME_PARAMS,
 )
 
@@ -219,7 +219,7 @@ def _ejecutar_dca(plan, precio):
     capital_dca = min(plan.capital, usdt_dispo * 0.98)
     nuevo_nivel = pos.get('dca_level', 0) + 1
 
-    if capital_dca < MIN_POSITION_CAPITAL or usdt_dispo < capital_dca * 0.95:
+    if capital_dca < MIN_DCA_CAPITAL or usdt_dispo < capital_dca * 0.95:
         logger.info(f"⚠️ Capital insuficiente para DCA: {capital_dca:.2f} USDT")
         return
 
