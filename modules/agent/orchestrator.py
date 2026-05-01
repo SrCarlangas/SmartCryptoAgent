@@ -26,6 +26,30 @@ class AgentOrchestrator:
     def decide(self, ctx: MarketContext, velas_15m=None, velas_1h=None) -> ExecutionPlan:
         plan = ExecutionPlan()
 
+        # 0. Override por instrucción del usuario (modo INSTRUCTION).
+        # Si hay una instrucción activa cuyas condiciones se cumplen, ejecuta
+        # ese plan bypassando reglas/agente. HARD_STOP_LOSS sigue activo via
+        # _check_hard_limits() en main.py (corre ANTES de orchestrator.decide).
+        try:
+            from modules.instructions.executor import InstructionExecutor
+            inst_plan = InstructionExecutor.get_singleton().evaluate(ctx)
+        except Exception as e:
+            logger.warning(f"⚠️ InstructionExecutor error: {e}")
+            inst_plan = None
+        if inst_plan is not None:
+            inst_plan.source = "instruction"
+            approved, veto_reason = self.risk_manager.validate_capital_only(inst_plan, ctx)
+            if not approved:
+                logger.info(f"🛡️ Instruction blocked: {veto_reason}")
+                inst_plan.vetoed = True
+                inst_plan.veto_reason = f"Instruction blocked: {veto_reason}"
+            else:
+                logger.info(
+                    f"📜 INSTRUCTION action={inst_plan.action} "
+                    f"target={inst_plan.target_position_id or '-'} | reasoning: {inst_plan.reasoning}"
+                )
+            return inst_plan
+
         # 1. SIEMPRE pre-computar recomendacion de reglas (costo $0)
         rules_decision = self._get_rules_decision(ctx, velas_15m, velas_1h)
 

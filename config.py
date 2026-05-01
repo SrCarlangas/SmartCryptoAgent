@@ -8,7 +8,7 @@ SYMBOL = 'BTC/USDT'
 TIMEFRAME = '15m'
 TIMEFRAME_TREND = '1h'
 TIMEFRAME_WEEKLY = '1w'
-PAUSA = 30  # Segundos entre ciclos
+PAUSA = int(os.getenv('PAUSA', '30'))  # Segundos entre ciclos
 
 # Limites de velas a obtener
 CANDLES_15M = 100
@@ -36,7 +36,7 @@ MAX_DCA_LEVELS = 5                 # maximo niveles DCA por posicion
 MAX_CAPITAL_PER_POSITION_PCT = 0.25  # 25% del balance por posicion
 MIN_POSITION_CAPITAL = 150.0          # minimo USDT para abrir posicion (fees: $0.30 round-trip → necesita margen real)
 MIN_DCA_CAPITAL = 50.0                # minimo USDT para DCA (menor que nueva posicion — promediando posicion existente)
-CAPITAL_PER_SLOT = 650.0              # capital minimo por slot antes de añadir otro (escala dinamica de posiciones)
+CAPITAL_PER_SLOT = float(os.getenv('CAPITAL_PER_SLOT', '650.0'))  # capital minimo por slot antes de añadir otro (escala dinamica de posiciones)
 
 # Cooldowns
 COOLDOWN_AFTER_SL = 30
@@ -121,6 +121,8 @@ REGIME_PARAMS = {
 AGENT_MODE = os.getenv('AGENT_MODE', 'primary')  # shadow | primary | full
 AGENT_MODEL = os.getenv('AGENT_MODEL', 'gemini-2.0-flash')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY', '')
+ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')  # slot para integración futura
+OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')        # slot para integración futura
 AGENT_MIN_CONFIDENCE = 0.5
 AGENT_CALL_TIMEOUT = 8.0    # segundos
 AGENT_MIN_INTERVAL = 60     # segundos minimo entre llamadas al LLM
@@ -128,3 +130,7 @@ AGENT_MAX_OUTPUT_TOKENS = 1024  # respuesta JSON compacta
 
 # --- Multi-Position ---
 MAX_CONCURRENT_POSITIONS = 5
+
+# --- API / Dashboard ---
+API_HOST = os.getenv('API_HOST', '127.0.0.1')
+API_PORT = int(os.getenv('API_PORT', '8088'))

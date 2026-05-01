@@ -128,6 +128,36 @@ class RiskManager:
 
         return True, ""
 
+    def validate_capital_only(self, plan, ctx):
+        """Validación mínima para instrucciones del usuario: bypassa reglas TP/SL/DCA
+        pero verifica capital, existencia de posición y cantidad > 0.
+        Retorna (aprobado: bool, razon: str).
+        """
+        action = getattr(plan, "action", "")
+
+        if action in ("BUY", "DCA"):
+            capital = float(getattr(plan, "capital", 0) or 0)
+            quantity = float(getattr(plan, "quantity", 0) or 0)
+            if capital <= 0 or quantity <= 0:
+                return False, f"{action}: capital o cantidad inválidos (cap={capital}, qty={quantity})"
+            usdt = float(getattr(ctx, "usdt_disponible", 0) or 0)
+            if capital > usdt * 0.99:
+                return False, f"USDT insuficiente: requiere {capital:.2f}, hay {usdt:.2f}"
+
+        elif action in ("SELL", "PARTIAL_SELL"):
+            pos_id = getattr(plan, "target_position_id", "")
+            if not pos_id:
+                return False, f"{action} sin target_position_id"
+            target = self._find_position(ctx, pos_id)
+            if not target:
+                return False, f"Posición {pos_id} no encontrada para {action}"
+            if action == "PARTIAL_SELL":
+                pct = float(getattr(plan, "sell_pct", 0) or 0)
+                if pct <= 0 or pct >= 1.0:
+                    return False, f"sell_pct inválido ({pct}) para PARTIAL_SELL"
+
+        return True, ""
+
     def calculate_position_size(self, capital, risk_pct, entry_price, stop_loss_price):
         """Sizing basado en riesgo: (capital * %risk) / |entry - SL|.
         Retorna USDT a desplegar.

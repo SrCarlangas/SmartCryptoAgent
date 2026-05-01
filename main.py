@@ -26,7 +26,11 @@ from config import (
     MAX_PORTFOLIO_EXPOSURE, COOLDOWN_AFTER_SL, COOLDOWN_AFTER_WIN,
     AGENT_MODE, MIN_POSITION_CAPITAL, MIN_DCA_CAPITAL,
     MAX_CONCURRENT_POSITIONS, REGIME_PARAMS,
+    API_HOST, API_PORT,
 )
+from backend.server import start_api_thread
+from backend.state_bridge import BotState
+from modules.instructions.executor import InstructionExecutor
 
 bot = BinanceConnector()
 estrategia = EstrategiaSmartDCA()
@@ -36,6 +40,58 @@ orchestrator = AgentOrchestrator(risk_manager, estrategia)
 regime_detector = RegimeDetector()
 
 estado = cargar_estado()
+BotState.initialize(estado)
+
+
+def _emit_instruction_event(event_type: str, payload: dict):
+    """Bridge: InstructionExecutor → BotState/WebSocket broadcasts."""
+    try:
+        bs = BotState.get()
+        bs.broadcast_instruction_event(event_type, payload)
+        if event_type in ("completed", "expired", "cancelled"):
+            bs.set_mode("NORMAL", None)
+        elif event_type == "triggered":
+            inst_id = payload.get("instruction_id")
+            if inst_id:
+                bs.set_mode("INSTRUCTION", inst_id)
+    except Exception as e:
+        logger.warning(f"⚠️ Error emitiendo evento de instrucción: {e}")
+
+
+InstructionExecutor.get_singleton().set_event_callback(_emit_instruction_event)
+
+
+def _sync_mode_from_store():
+    """Lee el store y sincroniza el modo actual del BotState al arrancar."""
+    try:
+        from modules.instructions.store import InstructionStore
+        active = InstructionStore.get_singleton().get_active()
+        bs = BotState.get()
+        if active:
+            bs.set_mode("INSTRUCTION", active.id)
+        else:
+            bs.set_mode("NORMAL", None)
+    except Exception:
+        pass
+
+
+def _ctx_to_tick_dict(ctx, balance_total: float) -> dict:
+    """Serializa MarketContext a un dict ligero para WS clients."""
+    return {
+        "price": float(getattr(ctx, "price", 0) or 0),
+        "regime": getattr(ctx, "regime", "LATERAL"),
+        "regime_confidence": float(getattr(ctx, "regime_confidence", 0) or 0),
+        "balance_total": float(balance_total or 0),
+        "usdt_disponible": float(getattr(ctx, "usdt_disponible", 0) or 0),
+        "portfolio_pnl": float(getattr(ctx, "portfolio_pnl", 0) or 0),
+        "portfolio_pnl_pct": float(getattr(ctx, "portfolio_pnl_pct", 0) or 0),
+        "rsi_14": float(getattr(ctx, "rsi_14", 50) or 50),
+        "rsi_weekly": float(getattr(ctx, "rsi_weekly", 50) or 50),
+        "available_slots": int(getattr(ctx, "available_slots", 0) or 0),
+        "num_positions": int(getattr(ctx, "num_positions", 0) or 0),
+        "exposure_pct": float(getattr(ctx, "exposure_pct", 0) or 0),
+        "cooldown_active": bool(getattr(ctx, "cooldown_active", False)),
+    }
 
 
 def _truncar_btc(cantidad):
@@ -494,6 +550,14 @@ def main():
         logger.info(f"   🎯 SELL FLOOR ACTIVO: ${sell_floor:,.2f} — liquidará TODO cuando BTC ≥ ese precio")
     logger.info("=" * 70)
 
+    # Lanzar API server para el panel de control
+    try:
+        start_api_thread(host=API_HOST, port=API_PORT)
+        logger.info(f"🌐 Dashboard API: http://{API_HOST}:{API_PORT}/api/docs")
+    except Exception as e:
+        logger.error(f"❌ No se pudo iniciar el API server: {e}")
+    _sync_mode_from_store()
+
     precio_inicial = None
     for _ in range(5):
         precio_inicial = bot.obtener_precio(SYMBOL)
@@ -692,6 +756,7 @@ def main():
                     logger.info(f"👀 Escaneando | P:{precio:.2f} | Posiciones: 0")
 
                 trigger_eval.force_update(ctx)
+                BotState.get().broadcast_tick(_ctx_to_tick_dict(ctx, balance_total))
                 time.sleep(PAUSA)
                 continue
 
@@ -702,6 +767,7 @@ def main():
 
             if plan.vetoed:
                 logger.info(f"🛡️ Decision vetada: {plan.veto_reason}")
+                BotState.get().broadcast_tick(_ctx_to_tick_dict(ctx, balance_total))
                 time.sleep(PAUSA)
                 continue
 
@@ -735,6 +801,7 @@ def main():
                 else:
                     cooldown_counter = _ejecutar_venta_parcial(plan, precio, cooldown_counter)
 
+            BotState.get().broadcast_tick(_ctx_to_tick_dict(ctx, balance_total))
             time.sleep(PAUSA)
 
         except Exception as e:
