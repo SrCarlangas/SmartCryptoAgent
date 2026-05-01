@@ -9,6 +9,7 @@ export function useBotWebSocket() {
   const setWsConnected = useBotStore((s) => s.setWsConnected);
   const applyTick = useBotStore((s) => s.applyTick);
   const setMode = useBotStore((s) => s.setMode);
+  const setRestart = useBotStore((s) => s.setRestart);
 
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef(0);
@@ -25,6 +26,13 @@ export function useBotWebSocket() {
 
       ws.onopen = () => {
         setWsConnected(true);
+        // Si estábamos en estado "reiniciando" y volvió la conexión, asumimos
+        // que el bot terminó de reiniciar y ya está operando con los nuevos
+        // parámetros (incluyendo reconciliación de saldos).
+        const prev = useBotStore.getState().restart;
+        if (prev.scheduled) {
+          setRestart({ scheduled: false, reason: '', requestedAt: 0 });
+        }
         retryRef.current = 0;
       };
 
@@ -37,6 +45,13 @@ export function useBotWebSocket() {
               break;
             case 'mode_changed':
               setMode(msg.data.mode, msg.data.active_instruction_id);
+              break;
+            case 'restart_requested':
+              setRestart({
+                scheduled: true,
+                reason: msg.data.reason,
+                requestedAt: msg.data.requested_at,
+              });
               break;
             case 'instruction_event':
             case 'trade_executed':

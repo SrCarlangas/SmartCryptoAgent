@@ -4,6 +4,10 @@ import type {
   DashboardSnapshot,
   InstructionOut,
   InstructionPreviewOut,
+  ParameterUpdateIn,
+  ParameterUpdateOut,
+  ParameterValueOut,
+  ParametersResponse,
 } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -54,5 +58,16 @@ export const api = {
     request<ConfigSaveResponse>('/api/config', {
       method: 'PUT',
       body: JSON.stringify(changes),
+    }),
+
+  getParameters: () => request<ParametersResponse>('/api/parameters'),
+  updateParameters: (updates: ParameterUpdateIn[]) =>
+    request<ParameterUpdateOut>('/api/parameters', {
+      method: 'PUT',
+      body: JSON.stringify({ updates }),
+    }),
+  resetParameter: (key: string) =>
+    request<ParameterValueOut>(`/api/parameters/${encodeURIComponent(key)}/reset`, {
+      method: 'POST',
     }),
 };

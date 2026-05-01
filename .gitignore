@@ -8,6 +8,7 @@ venv/
 state.json
 bot_state.json
 instructions.json
+parameters.json
 __pycache__/
 
 # archivo temporal

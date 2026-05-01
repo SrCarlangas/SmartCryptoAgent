@@ -129,7 +129,55 @@ export type WSEvent =
   | { type: 'mode_changed'; data: { mode: Mode; active_instruction_id: string | null }; ts: number }
   | { type: 'instruction_event'; data: { event: string; instruction_id: string;[k: string]: unknown }; ts: number }
   | { type: 'trade_executed'; data: TradeOut; ts: number }
-  | { type: 'position_change'; data: { positions: PositionOut[] }; ts: number };
+  | { type: 'position_change'; data: { positions: PositionOut[] }; ts: number }
+  | { type: 'restart_requested'; data: { reason: string; requested_at: number }; ts: number };
+
+// ---------- Parámetros ----------
+export interface ParameterValueOut {
+  key: string;
+  label: string;
+  type: 'int' | 'float' | 'percent' | 'bool' | 'select';
+  default: number | string | boolean;
+  min: number | null;
+  max: number | null;
+  step: number | null;
+  unit: string;
+  description: string;
+  category: string;
+  restart_required: boolean;
+  options: string[];
+  current_value: number | string | boolean;
+  current_display: number | string | boolean;
+  is_overridden: boolean;
+}
+
+export interface ParameterCategoryOut {
+  id: string;
+  label: string;
+  icon: string;
+}
+
+export interface ParametersResponse {
+  categories: ParameterCategoryOut[];
+  parameters: ParameterValueOut[];
+  restart: {
+    requested: boolean;
+    reason: string;
+    requested_at: number;
+  };
+}
+
+export interface ParameterUpdateIn {
+  key: string;
+  value: number | string | boolean;
+}
+
+export interface ParameterUpdateOut {
+  saved: string[];
+  errors: Record<string, string>;
+  restart_scheduled: boolean;
+  restart_in_seconds_max: number;
+}
 
 export interface TickPayload {
   price: number;

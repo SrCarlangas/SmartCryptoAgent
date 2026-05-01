@@ -1,5 +1,7 @@
 import argparse
 import math
+import os
+import sys
 import time
 from modules.binance_api import BinanceConnector
 from modules.strategy import EstrategiaSmartDCA
@@ -571,6 +573,27 @@ def main():
     ciclo_count = 0
     while True:
         try:
+            # Reinicio programado por el panel: re-ejecuta el proceso para que
+            # main() arranque de cero, lo que recarga config.py (con los nuevos
+            # valores de parameters.json) y vuelve a llamar reconciliar_estado()
+            # con los saldos reales. os.execv reemplaza el proceso (PID estable).
+            try:
+                if BotState.is_initialized() and BotState.get().is_restart_requested():
+                    info = BotState.get().get_restart_info()
+                    logger.info("=" * 70)
+                    logger.info(f"♻️ REINICIO PROGRAMADO: {info.get('reason', '')}")
+                    logger.info("   Persistiendo estado y re-ejecutando proceso...")
+                    try:
+                        guardar_estado(estado)
+                    except Exception as e:
+                        logger.warning(f"   No se pudo persistir estado antes del reinicio: {e}")
+                    logger.info("   El nuevo proceso ejecutará reconciliar_estado() en el arranque.")
+                    logger.info("=" * 70)
+                    time.sleep(0.8)  # margen para que el WS broadcast llegue al panel
+                    os.execv(sys.executable, [sys.executable, *sys.argv])
+            except Exception as e:
+                logger.error(f"❌ Error al ejecutar reinicio: {e}")
+
             ciclo_count += 1
             precio = bot.obtener_precio(SYMBOL)
             if not precio:

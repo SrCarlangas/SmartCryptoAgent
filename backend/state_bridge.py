@@ -23,6 +23,9 @@ class BotState:
         self._active_instruction_id: Optional[str] = None
         self._latest_ctx: dict = {}
         self._started_at: float = time.time()
+        self._restart_requested: bool = False
+        self._restart_reason: str = ""
+        self._restart_requested_at: float = 0.0
 
     @classmethod
     def initialize(cls, estado: dict) -> "BotState":
@@ -93,3 +96,29 @@ class BotState:
 
     def uptime_seconds(self) -> float:
         return time.time() - self._started_at
+
+    # ---------- Reinicio programado ----------
+
+    def request_restart(self, reason: str = "config change"):
+        """Marca al bot para reiniciarse al inicio del próximo ciclo.
+        El reinicio usa os.execv → main() arranca de cero, lo que ejecuta
+        cargar_estado + reconciliar_estado automáticamente.
+        """
+        if not self._restart_requested:
+            self._restart_requested = True
+            self._restart_reason = reason
+            self._restart_requested_at = time.time()
+            ws_manager.broadcast_threadsafe(
+                "restart_requested",
+                {"reason": reason, "requested_at": self._restart_requested_at},
+            )
+
+    def is_restart_requested(self) -> bool:
+        return self._restart_requested
+
+    def get_restart_info(self) -> dict:
+        return {
+            "requested": self._restart_requested,
+            "reason": self._restart_reason,
+            "requested_at": self._restart_requested_at,
+        }

@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import type { DashboardSnapshot, InstructionOut, Mode, TickPayload } from '../api/types';
 
+interface RestartState {
+  scheduled: boolean;
+  reason: string;
+  requestedAt: number;
+}
+
 interface BotStoreState {
   dashboard: DashboardSnapshot | null;
   instructions: InstructionOut[];
@@ -8,6 +14,7 @@ interface BotStoreState {
   activeInstructionId: string | null;
   wsConnected: boolean;
   lastTickTs: number;
+  restart: RestartState;
 
   setDashboard: (d: DashboardSnapshot) => void;
   applyTick: (tick: TickPayload) => void;
@@ -15,6 +22,7 @@ interface BotStoreState {
   upsertInstruction: (inst: InstructionOut) => void;
   setMode: (mode: Mode, activeId: string | null) => void;
   setWsConnected: (v: boolean) => void;
+  setRestart: (r: RestartState) => void;
 }
 
 export const useBotStore = create<BotStoreState>((set) => ({
@@ -24,6 +32,7 @@ export const useBotStore = create<BotStoreState>((set) => ({
   activeInstructionId: null,
   wsConnected: false,
   lastTickTs: 0,
+  restart: { scheduled: false, reason: '', requestedAt: 0 },
 
   setDashboard: (d) =>
     set({
@@ -75,4 +84,6 @@ export const useBotStore = create<BotStoreState>((set) => ({
     })),
 
   setWsConnected: (v) => set({ wsConnected: v }),
+
+  setRestart: (r) => set({ restart: r }),
 }));

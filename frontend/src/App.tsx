@@ -1,17 +1,20 @@
 import { useEffect, useState } from 'react';
 import { api } from './api/client';
 import { ModeBanner } from './components/ModeBanner';
+import { RestartBanner } from './components/RestartBanner';
 import { useBotWebSocket } from './hooks/useWebSocket';
 import { ConfigPage } from './pages/ConfigPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { InstructionsPage } from './pages/InstructionsPage';
+import { ParametersPage } from './pages/ParametersPage';
 import { useBotStore } from './store/botStore';
 
-type Tab = 'dashboard' | 'instructions' | 'config';
+type Tab = 'dashboard' | 'instructions' | 'parameters' | 'config';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'instructions', label: 'Instrucciones' },
+  { id: 'parameters', label: 'Parámetros' },
   { id: 'config', label: 'Configuración' },
 ];
 
@@ -52,6 +55,7 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col">
       <ModeBanner onCancelInstruction={cancelActive} />
+      <RestartBanner />
 
       <header className="border-b border-slate-800 bg-slate-900/40">
         <div className="max-w-7xl mx-auto px-4 py-2 flex items-center justify-between">
@@ -81,6 +85,7 @@ export default function App() {
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-5">
         {tab === 'dashboard' && <DashboardPage />}
         {tab === 'instructions' && <InstructionsPage />}
+        {tab === 'parameters' && <ParametersPage />}
         {tab === 'config' && <ConfigPage />}
       </main>
 

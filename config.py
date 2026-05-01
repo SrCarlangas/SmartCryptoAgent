@@ -3,53 +3,82 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
+# --- Overrides desde parameters.json (panel) ---
+# Importación local para evitar dependencias circulares y poder fallar grace-
+# fully si backend/ no existe en futuros deploys aislados del CLI.
+def _load_param_overrides():
+    try:
+        from backend.parameters_store import load_parameter_overrides
+        return load_parameter_overrides()
+    except Exception:
+        return {}
+
+
+_PARAM_OVERRIDES = _load_param_overrides()
+
+
+def _p(key, default, cast=None):
+    """Lee parámetro: parameters.json > .env > default. Aplica cast opcional."""
+    if key in _PARAM_OVERRIDES:
+        v = _PARAM_OVERRIDES[key]
+    else:
+        v = os.getenv(key, default)
+    if cast is None:
+        return v
+    try:
+        return cast(v)
+    except (TypeError, ValueError):
+        return cast(default)
+
+
 # --- Trading Configuration ---
 SYMBOL = 'BTC/USDT'
 TIMEFRAME = '15m'
 TIMEFRAME_TREND = '1h'
 TIMEFRAME_WEEKLY = '1w'
-PAUSA = int(os.getenv('PAUSA', '30'))  # Segundos entre ciclos
+PAUSA = _p('PAUSA', 30, int)  # Segundos entre ciclos
 
 # Limites de velas a obtener
-CANDLES_15M = 100
-CANDLES_1H = 300       # necesario para EMA_200
-CANDLES_1W = 20        # para RSI semanal
+CANDLES_15M = _p('CANDLES_15M', 100, int)
+CANDLES_1H = _p('CANDLES_1H', 300, int)       # necesario para EMA_200
+CANDLES_1W = _p('CANDLES_1W', 20, int)        # para RSI semanal
 
 # Gestion de Salida (legacy — ahora por regimen en REGIME_PARAMS)
-TAKE_PROFIT_PCT = 0.015
-STOP_LOSS_GLOBAL_PCT = 0.08
-HARD_STOP_LOSS_PCT = 0.15   # safety net universal, nunca se negocia
-DCA_NIVEL_1_DROP = 0.025
-DCA_NIVEL_2_DROP = 0.05
+TAKE_PROFIT_PCT = _p('TAKE_PROFIT_PCT', 0.015, float)
+STOP_LOSS_GLOBAL_PCT = _p('STOP_LOSS_GLOBAL_PCT', 0.08, float)
+HARD_STOP_LOSS_PCT = _p('HARD_STOP_LOSS_PCT', 0.15, float)   # safety net universal, nunca se negocia
+DCA_NIVEL_1_DROP = _p('DCA_NIVEL_1_DROP', 0.025, float)
+DCA_NIVEL_2_DROP = _p('DCA_NIVEL_2_DROP', 0.05, float)
 
 # --- Gestion de Riesgo Universal ---
-RISK_PER_TRADE_PCT = 0.02          # 1-2% del capital por operacion
-MIN_RISK_REWARD = 2.0              # R:R minimo 1:2
-DAILY_LOSS_LIMIT_PCT = 0.05        # 5% perdida diaria -> detener
-MIN_USDT_RESERVE_PCT = 0.30        # mantener 30% en USDT siempre
-MAX_PORTFOLIO_EXPOSURE = 0.70      # 70% max (derivado de 30% reserva)
-DCA_BASE_UNIT_PCT = 0.03           # unidad base DCA: 2-5% del capital
-MIN_PROFIT_AFTER_FEES_PCT = 0.004  # 0.4% ROI minimo para vender (cubre 0.2% fees + margen)
-MAX_DCA_LEVELS = 5                 # maximo niveles DCA por posicion
+RISK_PER_TRADE_PCT = _p('RISK_PER_TRADE_PCT', 0.02, float)          # 1-2% del capital por operacion
+MIN_RISK_REWARD = _p('MIN_RISK_REWARD', 2.0, float)                 # R:R minimo 1:2
+DAILY_LOSS_LIMIT_PCT = _p('DAILY_LOSS_LIMIT_PCT', 0.05, float)      # 5% perdida diaria -> detener
+MIN_USDT_RESERVE_PCT = _p('MIN_USDT_RESERVE_PCT', 0.30, float)      # mantener 30% en USDT siempre
+MAX_PORTFOLIO_EXPOSURE = _p('MAX_PORTFOLIO_EXPOSURE', 0.70, float)  # 70% max (derivado de 30% reserva)
+DCA_BASE_UNIT_PCT = _p('DCA_BASE_UNIT_PCT', 0.03, float)            # unidad base DCA: 2-5% del capital
+MIN_PROFIT_AFTER_FEES_PCT = _p('MIN_PROFIT_AFTER_FEES_PCT', 0.004, float)
+MAX_DCA_LEVELS = _p('MAX_DCA_LEVELS', 5, int)                       # maximo niveles DCA por posicion
 
 # Capital
-MAX_CAPITAL_PER_POSITION_PCT = 0.25  # 25% del balance por posicion
-MIN_POSITION_CAPITAL = 150.0          # minimo USDT para abrir posicion (fees: $0.30 round-trip → necesita margen real)
-MIN_DCA_CAPITAL = 50.0                # minimo USDT para DCA (menor que nueva posicion — promediando posicion existente)
-CAPITAL_PER_SLOT = float(os.getenv('CAPITAL_PER_SLOT', '650.0'))  # capital minimo por slot antes de añadir otro (escala dinamica de posiciones)
+MAX_CAPITAL_PER_POSITION_PCT = _p('MAX_CAPITAL_PER_POSITION_PCT', 0.25, float)
+MIN_POSITION_CAPITAL = _p('MIN_POSITION_CAPITAL', 150.0, float)
+MIN_DCA_CAPITAL = _p('MIN_DCA_CAPITAL', 50.0, float)
+CAPITAL_PER_SLOT = _p('CAPITAL_PER_SLOT', 650.0, float)
 
 # Cooldowns
-COOLDOWN_AFTER_SL = 30
-COOLDOWN_AFTER_WIN = 5
+COOLDOWN_AFTER_SL = _p('COOLDOWN_AFTER_SL', 30, int)
+COOLDOWN_AFTER_WIN = _p('COOLDOWN_AFTER_WIN', 5, int)
 
 # --- Deteccion de Regimen ---
-REGIME_ADX_TREND = 25       # ADX > esto = tendencia
-REGIME_ADX_LATERAL = 20     # ADX < esto = lateral
-REGIME_WEEKLY_RSI_BULL = 60
-REGIME_WEEKLY_RSI_BEAR = 40
-CRASH_DROP_24H = -0.10      # caida >10% en 24h
-CRASH_VOLUME_RATIO = 2.0    # volumen extremo
-CRASH_FNG_MAX = 20           # Fear & Greed < 20
+REGIME_ADX_TREND = _p('REGIME_ADX_TREND', 25, float)
+REGIME_ADX_LATERAL = _p('REGIME_ADX_LATERAL', 20, float)
+REGIME_WEEKLY_RSI_BULL = _p('REGIME_WEEKLY_RSI_BULL', 60, float)
+REGIME_WEEKLY_RSI_BEAR = _p('REGIME_WEEKLY_RSI_BEAR', 40, float)
+CRASH_DROP_24H = _p('CRASH_DROP_24H', -0.10, float)
+CRASH_VOLUME_RATIO = _p('CRASH_VOLUME_RATIO', 2.0, float)
+CRASH_FNG_MAX = _p('CRASH_FNG_MAX', 20, int)
 
 # Smart DCA RSI multipliers (tabla universal)
 SMART_DCA_RSI_TABLE = [
@@ -123,13 +152,13 @@ AGENT_MODEL = os.getenv('AGENT_MODEL', 'gemini-2.0-flash')
 GOOGLE_API_KEY = os.getenv('GOOGLE_API_KEY', '')
 ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY', '')  # slot para integración futura
 OPENAI_API_KEY = os.getenv('OPENAI_API_KEY', '')        # slot para integración futura
-AGENT_MIN_CONFIDENCE = 0.5
-AGENT_CALL_TIMEOUT = 8.0    # segundos
-AGENT_MIN_INTERVAL = 60     # segundos minimo entre llamadas al LLM
-AGENT_MAX_OUTPUT_TOKENS = 1024  # respuesta JSON compacta
+AGENT_MIN_CONFIDENCE = _p('AGENT_MIN_CONFIDENCE', 0.5, float)
+AGENT_CALL_TIMEOUT = _p('AGENT_CALL_TIMEOUT', 8.0, float)
+AGENT_MIN_INTERVAL = _p('AGENT_MIN_INTERVAL', 60, int)
+AGENT_MAX_OUTPUT_TOKENS = _p('AGENT_MAX_OUTPUT_TOKENS', 1024, int)
 
 # --- Multi-Position ---
-MAX_CONCURRENT_POSITIONS = 5
+MAX_CONCURRENT_POSITIONS = _p('MAX_CONCURRENT_POSITIONS', 5, int)
 
 # --- API / Dashboard ---
 API_HOST = os.getenv('API_HOST', '127.0.0.1')
