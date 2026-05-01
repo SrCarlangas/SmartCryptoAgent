@@ -411,8 +411,9 @@ class AgentOrchestrator:
         plan = ExecutionPlan()
         plan.action = decision.action
         plan.target_position_id = decision.target_position_id
-        plan.reasoning = decision.reasoning
+        plan.reasoning = decision.reasoning or self._default_reasoning(decision, ctx)
         plan.source = decision.source
+        plan.confidence = float(getattr(decision, "confidence", 0.0) or 0.0)
         plan.sell_pct = decision.sell_pct
         plan.exit_trigger = decision.exit_trigger
 
@@ -423,6 +424,25 @@ class AgentOrchestrator:
                 plan.quantity = plan.capital / ctx.price
 
         return plan
+
+    def _default_reasoning(self, decision: TradingDecision, ctx: MarketContext) -> str:
+        """Construye un reasoning descriptivo cuando el LLM responde sin texto.
+        Útil para auditar decisiones HOLD silenciosas.
+        """
+        action = decision.action or "HOLD"
+        regime = getattr(ctx, "regime", "?")
+        rsi = getattr(ctx, "rsi_14", None)
+        rsi_w = getattr(ctx, "rsi_weekly", None)
+        portfolio_pnl_pct = getattr(ctx, "portfolio_pnl_pct", None)
+        bits = [f"{action} en régimen {regime}"]
+        if isinstance(rsi, (int, float)):
+            bits.append(f"RSI:{rsi:.0f}")
+        if isinstance(rsi_w, (int, float)):
+            bits.append(f"RSI_w:{rsi_w:.0f}")
+        if isinstance(portfolio_pnl_pct, (int, float)) and portfolio_pnl_pct:
+            bits.append(f"PnL:{portfolio_pnl_pct*100:+.1f}%")
+        bits.append(f"src:{decision.source}")
+        return "(auto) " + " | ".join(bits)
 
     def _log_comparison(self, agent: TradingDecision, rules: TradingDecision):
         match = "✅ COINCIDEN" if agent.action == rules.action else "❌ DIFIEREN"

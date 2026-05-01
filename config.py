@@ -80,6 +80,11 @@ CRASH_DROP_24H = _p('CRASH_DROP_24H', -0.10, float)
 CRASH_VOLUME_RATIO = _p('CRASH_VOLUME_RATIO', 2.0, float)
 CRASH_FNG_MAX = _p('CRASH_FNG_MAX', 20, int)
 
+# --- Filtros de entrada (Risk Guardian) ---
+PEAK_GUARD_DISTANCE_PCT = _p('PEAK_GUARD_DISTANCE_PCT', 0.015, float)  # bloquea BUY si precio < N% del swing_high_48h
+ADX_BEARISH_GAP = _p('ADX_BEARISH_GAP', 5.0, float)                     # bloquea BUY si -DI > +DI + N (en 1h)
+EMA50_1H_TOLERANCE_PCT = _p('EMA50_1H_TOLERANCE_PCT', -0.05, float)     # bloquea BUY si precio_vs_EMA50_1h < N (negativo)
+
 # Smart DCA RSI multipliers (tabla universal)
 SMART_DCA_RSI_TABLE = [
     (25, 3.0), (35, 2.5), (45, 2.0), (55, 1.0), (65, 0.0),

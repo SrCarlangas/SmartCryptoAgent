@@ -128,6 +128,7 @@ class ExecutionPlan:
     quantity: float = 0.0
     reasoning: str = ""
     source: str = "agent"
+    confidence: float = 0.0
     vetoed: bool = False
     veto_reason: str = ""
     sell_pct: float = 1.0

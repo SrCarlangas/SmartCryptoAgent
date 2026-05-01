@@ -131,6 +131,7 @@ class InstructionExecutor:
         plan = ExecutionPlan()
         plan.action = action.type
         plan.source = "instruction"
+        plan.confidence = 1.0  # instrucción explícita del usuario → confianza máxima
         plan.reasoning = f"User instruction: {action.type}"
         plan.sell_pct = action.sell_pct
         plan.target_position_id = action.target_position_id

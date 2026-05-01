@@ -257,7 +257,7 @@ def _ejecutar_compra(plan, precio, balance_total):
         }
         estado['positions'].append(new_pos)
         estado['usdt_disponible'] = max(0, usdt_dispo - total_cost)
-        registrar_decision_agente(estado, plan.source, "BUY", 0.0, plan.reasoning)
+        registrar_decision_agente(estado, plan.source, "BUY", float(getattr(plan, "confidence", 0.0) or 0.0), plan.reasoning)
         guardar_estado(estado)
         num = len(estado['positions'])
         logger.info(
@@ -303,7 +303,7 @@ def _ejecutar_dca(plan, precio):
         pos['dca_level'] = nuevo_nivel
         pos['total_invested'] = pos.get('total_invested', 0) + dca_cost
         estado['usdt_disponible'] = max(0, usdt_dispo - dca_cost)
-        registrar_decision_agente(estado, plan.source, "DCA", 0.0, plan.reasoning)
+        registrar_decision_agente(estado, plan.source, "DCA", float(getattr(plan, "confidence", 0.0) or 0.0), plan.reasoning)
         guardar_estado(estado)
         logger.info(
             f"✅ DCA Nivel {nuevo_nivel} [{plan.target_position_id}] a ${dca_price:.2f} (real) | "
@@ -786,7 +786,7 @@ def main():
             # === DECISION AGENTICA ===
             plan = orchestrator.decide(ctx, velas_15m, velas_1h)
 
-            registrar_decision_agente(estado, plan.source, plan.action, 0.0, plan.reasoning)
+            registrar_decision_agente(estado, plan.source, plan.action, float(getattr(plan, "confidence", 0.0) or 0.0), plan.reasoning)
 
             if plan.vetoed:
                 logger.info(f"🛡️ Decision vetada: {plan.veto_reason}")

@@ -293,6 +293,50 @@ PARAMETER_CATALOG: List[ParamDef] = [
         "restart_required": True,
     },
 
+    # ── Filtros de entrada (Risk Guardian) ─────────────────────────────────
+    {
+        "key": "PEAK_GUARD_DISTANCE_PCT",
+        "label": "Peak Guard — distancia mínima al swing high 48h",
+        "type": "percent",
+        "default": 0.015,
+        "min": 0, "max": 10, "step": 0.1,
+        "description": (
+            "Bloquea BUY si el precio actual está dentro de este porcentaje del "
+            "máximo reciente (swing_high_48h). Evita comprar cerca del techo en "
+            "consolidaciones laterales. Bajar = más entradas pero mayor riesgo "
+            "de comprar en pico. 0% lo desactiva."
+        ),
+        "category": "filters",
+        "restart_required": True,
+    },
+    {
+        "key": "ADX_BEARISH_GAP",
+        "label": "ADX 1h bajista — gap mínimo -DI vs +DI",
+        "type": "float",
+        "default": 5.0,
+        "min": 0, "max": 30, "step": 0.5,
+        "description": (
+            "Bloquea BUY si en 1h el -DI supera al +DI por más de este valor "
+            "(ADX > 20). Confirma momentum bajista antes de pausar entradas."
+        ),
+        "category": "filters",
+        "restart_required": True,
+    },
+    {
+        "key": "EMA50_1H_TOLERANCE_PCT",
+        "label": "Filtro macro 1H — tolerancia bajo EMA50",
+        "type": "percent",
+        "default": -0.05,
+        "min": -20, "max": 0, "step": 0.5,
+        "description": (
+            "Bloquea BUY si el precio está más de este porcentaje (negativo) "
+            "bajo la EMA50 de 1h. Default -5% bloquea entradas con precio muy "
+            "extendido bajo la media."
+        ),
+        "category": "filters",
+        "restart_required": True,
+    },
+
     # ── Detección de régimen ───────────────────────────────────────────────
     {
         "key": "REGIME_ADX_TREND",
@@ -517,6 +561,7 @@ CATEGORIES = [
     {"id": "capital", "label": "Capital y posiciones", "icon": "💰"},
     {"id": "risk", "label": "Gestión de riesgo", "icon": "🛡️"},
     {"id": "dca", "label": "DCA", "icon": "📉"},
+    {"id": "filters", "label": "Filtros de entrada", "icon": "🎯"},
     {"id": "regime", "label": "Detección de régimen", "icon": "📊"},
     {"id": "agent", "label": "Agente IA", "icon": "🧠"},
     {"id": "cooldowns", "label": "Cooldowns", "icon": "⏳"},
