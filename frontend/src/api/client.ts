@@ -3,12 +3,16 @@ import type {
   ConfigSaveResponse,
   DailyPnLResponse,
   DashboardSnapshot,
+  DistributionResponse,
+  EfficiencySummary,
   InstructionOut,
   InstructionPreviewOut,
   ParameterUpdateIn,
   ParameterUpdateOut,
   ParameterValueOut,
   ParametersResponse,
+  TradePostmortemResponse,
+  VetoPostmortemResponse,
 } from './types';
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -73,4 +77,15 @@ export const api = {
     }),
 
   pnlDaily: (days = 30) => request<DailyPnLResponse>(`/api/pnl-daily?days=${days}`),
+
+  efficiencySummary: (days = 7) =>
+    request<EfficiencySummary>(`/api/efficiency/summary?days=${days}`),
+  efficiencyTradePostmortem: (days = 7, lookaheadHours = 4) =>
+    request<TradePostmortemResponse>(
+      `/api/efficiency/trade-postmortem?days=${days}&lookahead_hours=${lookaheadHours}`
+    ),
+  efficiencyDistribution: (days = 30) =>
+    request<DistributionResponse>(`/api/efficiency/distribution?days=${days}`),
+  efficiencyVetoPostmortem: (days = 14) =>
+    request<VetoPostmortemResponse>(`/api/efficiency/veto-postmortem?days=${days}`),
 };

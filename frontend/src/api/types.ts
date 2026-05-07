@@ -212,6 +212,94 @@ export interface DailyPnLResponse {
   summary: DailyPnLSummary;
 }
 
+// ---------- Eficiencia ----------
+export interface TradePostmortem {
+  timestamp: string;
+  action: string;
+  sell_price: number;
+  pnl: number | null;
+  fee: number;
+  lookahead_hours: number;
+  max_price_after: number | null;
+  max_price_at: string | null;
+  missed_pct: number | null;
+  min_price_after: number | null;
+  drop_pct: number | null;
+  samples: number;
+}
+
+export interface TradePostmortemResponse {
+  items: TradePostmortem[];
+  summary: {
+    period_days: number;
+    lookahead_hours: number;
+    sells_analyzed: number;
+    sells_with_data?: number;
+    avg_missed_pct?: number;
+    median_missed_pct?: number;
+    max_missed_pct?: number;
+    sells_with_significant_miss?: number;
+  };
+}
+
+export interface RoiBucket {
+  label: string;
+  range_low: number;
+  range_high: number;
+  count: number;
+  total_pnl: number;
+}
+
+export interface DistributionResponse {
+  buckets: RoiBucket[];
+  total_trades: number;
+  total_pnl: number;
+  pct_below_threshold: number;
+  pct_negative: number;
+  avg_pnl: number;
+  median_pnl: number;
+}
+
+export interface VetoPostmortem {
+  timestamp: string;
+  veto_type: string;
+  blocked_price: number;
+  reason: string;
+  price_after_1h: number | null;
+  price_after_4h: number | null;
+  return_1h_pct: number | null;
+  return_4h_pct: number | null;
+  would_have_been_profitable: boolean | null;
+}
+
+export interface VetoPostmortemResponse {
+  items: VetoPostmortem[];
+  summary: {
+    period_days?: number;
+    total_vetos: number;
+    by_type?: Record<string, number>;
+    profitable_count?: number;
+    profitable_pct?: number;
+  };
+}
+
+export interface EfficiencySummary {
+  period_days: number;
+  total_sells: number;
+  total_pnl: number;
+  total_fees: number;
+  fee_burden_pct: number;
+  avg_pnl_per_sell: number;
+  median_pnl_per_sell: number;
+  pct_micro_wins: number;
+  pct_negative_sells: number;
+  avg_missed_pct: number;
+  sells_with_significant_miss: number;
+  veto_count: number;
+  profitable_vetos_pct: number;
+  recommendation: string;
+}
+
 export interface TickPayload {
   price: number;
   regime: string;

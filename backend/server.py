@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.routers import config as config_router
 from backend.routers import dashboard as dashboard_router
+from backend.routers import efficiency as efficiency_router
 from backend.routers import instructions as instructions_router
 from backend.routers import parameters as parameters_router
 from backend.routers import ws as ws_router
@@ -45,6 +46,7 @@ def create_app() -> FastAPI:
     app.include_router(instructions_router.router)
     app.include_router(config_router.router)
     app.include_router(parameters_router.router)
+    app.include_router(efficiency_router.router)
     app.include_router(ws_router.router)
 
     @app.on_event("startup")

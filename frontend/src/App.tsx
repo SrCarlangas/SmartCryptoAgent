@@ -5,14 +5,16 @@ import { RestartBanner } from './components/RestartBanner';
 import { useBotWebSocket } from './hooks/useWebSocket';
 import { ConfigPage } from './pages/ConfigPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { EfficiencyPage } from './pages/EfficiencyPage';
 import { InstructionsPage } from './pages/InstructionsPage';
 import { ParametersPage } from './pages/ParametersPage';
 import { useBotStore } from './store/botStore';
 
-type Tab = 'dashboard' | 'instructions' | 'parameters' | 'config';
+type Tab = 'dashboard' | 'efficiency' | 'instructions' | 'parameters' | 'config';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'efficiency', label: 'Eficiencia' },
   { id: 'instructions', label: 'Instrucciones' },
   { id: 'parameters', label: 'Parámetros' },
   { id: 'config', label: 'Configuración' },
@@ -84,6 +86,7 @@ export default function App() {
 
       <main className="flex-1 max-w-7xl mx-auto w-full px-4 py-5">
         {tab === 'dashboard' && <DashboardPage />}
+        {tab === 'efficiency' && <EfficiencyPage />}
         {tab === 'instructions' && <InstructionsPage />}
         {tab === 'parameters' && <ParametersPage />}
         {tab === 'config' && <ConfigPage />}
