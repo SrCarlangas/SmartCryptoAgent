@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { api } from '../api/client';
 import type { InstructionPreviewOut } from '../api/types';
 
@@ -19,15 +19,54 @@ export function InstructionEditor({ onCreated }: Props) {
   const [previewing, setPreviewing] = useState(false);
   const [activating, setActivating] = useState(false);
   const [err, setErr] = useState<string | null>(null);
+  const debounceRef = useRef<number | null>(null);
+  const lastPreviewedRef = useRef<string>('');
+
+  // Auto-preview con debounce: a medida que el usuario escribe, después de
+  // 600ms sin nuevos cambios, automáticamente ejecuta el preview. Esto
+  // resuelve la confusión de UX donde el botón "Activar" parecía "no responder"
+  // porque el usuario no sabía que debía hacer preview manual primero.
+  useEffect(() => {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      setPreview(null);
+      return;
+    }
+    // Cancela debounce previo
+    if (debounceRef.current !== null) {
+      window.clearTimeout(debounceRef.current);
+    }
+    debounceRef.current = window.setTimeout(async () => {
+      // Evita re-preview si el texto no cambió desde el último preview
+      const key = `${trimmed}|${complex}`;
+      if (lastPreviewedRef.current === key) return;
+      setPreviewing(true);
+      setErr(null);
+      try {
+        const p = await api.previewInstruction(trimmed, complex);
+        setPreview(p);
+        lastPreviewedRef.current = key;
+      } catch (e) {
+        setErr(String(e));
+      } finally {
+        setPreviewing(false);
+      }
+    }, 600);
+    return () => {
+      if (debounceRef.current !== null) {
+        window.clearTimeout(debounceRef.current);
+      }
+    };
+  }, [text, complex]);
 
   async function doPreview() {
     if (!text.trim()) return;
     setPreviewing(true);
     setErr(null);
-    setPreview(null);
     try {
       const p = await api.previewInstruction(text, complex);
       setPreview(p);
+      lastPreviewedRef.current = `${text.trim()}|${complex}`;
     } catch (e) {
       setErr(String(e));
     } finally {
@@ -36,13 +75,31 @@ export function InstructionEditor({ onCreated }: Props) {
   }
 
   async function doActivate() {
-    if (!preview?.can_activate) return;
+    if (!text.trim()) return;
     setActivating(true);
     setErr(null);
     try {
+      // Si el preview no está listo o está stale, hacerlo ahora antes de activar
+      let p = preview;
+      const key = `${text.trim()}|${complex}`;
+      if (!p || lastPreviewedRef.current !== key) {
+        p = await api.previewInstruction(text, complex);
+        setPreview(p);
+        lastPreviewedRef.current = key;
+      }
+      if (!p.can_activate) {
+        setErr(
+          'No se puede activar: ' +
+            (p.blocking_warnings.join('; ') ||
+              p.parsed.parse_warnings.join('; ') ||
+              'instrucción no válida')
+        );
+        return;
+      }
       await api.createInstruction(text, complex);
       setText('');
       setPreview(null);
+      lastPreviewedRef.current = '';
       onCreated();
     } catch (e) {
       setErr(String(e));
@@ -60,13 +117,16 @@ export function InstructionEditor({ onCreated }: Props) {
         <textarea
           rows={3}
           value={text}
-          onChange={(e) => {
-            setText(e.target.value);
-            setPreview(null);
-          }}
+          onChange={(e) => setText(e.target.value)}
           placeholder="Ej: compra 0.001 BTC si baja a $95000, vende cuando llegue a $98000"
           className="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-orange-500 resize-y"
         />
+        <div className="text-xs text-slate-500 mt-1">
+          {previewing ? '⏳ Parseando...' :
+           preview?.can_activate ? '✅ Lista para activar' :
+           preview && !preview.can_activate ? '⚠️ Revisar avisos abajo' :
+           'Empieza a escribir — el parser valida automáticamente cada 600ms'}
+        </div>
         <div className="flex flex-wrap gap-2 mt-2">
           {EXAMPLES.map((ex) => (
             <button
@@ -87,29 +147,33 @@ export function InstructionEditor({ onCreated }: Props) {
         <input
           type="checkbox"
           checked={complex}
-          onChange={(e) => {
-            setComplex(e.target.checked);
-            setPreview(null);
-          }}
+          onChange={(e) => setComplex(e.target.checked)}
           className="rounded"
         />
         Marcar como compleja (evaluación LLM por ciclo — aún no disponible)
       </label>
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-2 items-center">
+        <button
+          onClick={doActivate}
+          disabled={!text.trim() || activating}
+          className="bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-medium"
+          title={
+            preview?.can_activate
+              ? 'Activar instrucción'
+              : preview && !preview.can_activate
+                ? 'El parser detectó problemas — corregilos abajo'
+                : 'Se previsualizará automáticamente al hacer clic'
+          }
+        >
+          {activating ? 'Activando...' : 'Activar instrucción'}
+        </button>
         <button
           onClick={doPreview}
           disabled={!text.trim() || previewing}
-          className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-100 px-4 py-2 rounded-md text-sm font-medium"
+          className="bg-slate-700 hover:bg-slate-600 disabled:opacity-50 text-slate-100 px-3 py-2 rounded-md text-xs"
         >
-          {previewing ? 'Parseando...' : 'Vista previa'}
-        </button>
-        <button
-          onClick={doActivate}
-          disabled={!preview?.can_activate || activating}
-          className="bg-orange-600 hover:bg-orange-500 disabled:opacity-50 text-white px-4 py-2 rounded-md text-sm font-medium"
-        >
-          {activating ? 'Activando...' : 'Activar'}
+          {previewing ? 'Parseando...' : 'Re-previsualizar'}
         </button>
       </div>
 

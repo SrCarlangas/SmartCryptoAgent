@@ -89,30 +89,46 @@ def _detect_clause_condition(clause: str, is_buy: bool) -> Optional[Condition]:
 
 
 def _split_action_from_condition(clause: str) -> str:
-    """Devuelve solo la parte 'qué hago' de un clause (lo que está antes del trigger 'si/cuando/when')."""
+    """Devuelve solo la parte 'qué hago' de un clause (lo que está antes del trigger 'si/cuando/when').
+    Si el trigger está al inicio del clause (orden invertido tipo 'si X compra Y'),
+    devuelve la parte DESPUÉS del trigger en lugar de un string vacío."""
     t = clause.lower()
     earliest = len(clause)
+    earliest_kw = ""
     for trig in _CONDITION_TRIGGERS:
         idx = t.find(trig)
         if idx >= 0 and idx < earliest:
             earliest = idx
-    return clause[:earliest] if earliest < len(clause) else clause
+            earliest_kw = trig
+    if earliest >= len(clause):
+        return clause
+    if earliest == 0:
+        # Trigger al inicio (ej: "Si BTC baja a $80000 compra 0.001 BTC")
+        # → la parte de acción está DESPUÉS del trigger; la condición está al inicio
+        # Devolvemos la cláusula completa para que la cantidad se busque global
+        return clause
+    return clause[:earliest]
 
 
 def _detect_quantity(text: str) -> Tuple[float, float]:
-    """Retorna (qty_btc, qty_usdt) detectados solo en la porción 'qué hago' (antes del trigger)."""
+    """Retorna (qty_btc, qty_usdt) detectados.
+
+    BTC qty (ej: "0.001 BTC") es muy específico → buscar en cláusula completa.
+    USDT explícito ("50 USDT") también es específico → buscar global.
+    "$X" solo (ambiguo, puede ser precio gatillo) → solo buscar en parte de acción.
+    """
     head = _split_action_from_condition(text)
     qty_btc = 0.0
     qty_usdt = 0.0
-    m = re.search(_BTC_QTY_RE, head, re.IGNORECASE)
+    # Búsqueda global: BTC explícito y USDT explícito son patrones inequívocos
+    m = re.search(_BTC_QTY_RE, text, re.IGNORECASE)
     if m:
         qty_btc = _norm_number(m.group(1))
-    # USDT explícito ("50 USDT") tiene prioridad
-    m = re.search(r"([\d]+(?:\.\d+)?)\s*usdt?\b", head, re.IGNORECASE)
+    m = re.search(r"([\d]+(?:\.\d+)?)\s*usdt?\b", text, re.IGNORECASE)
     if m:
         qty_usdt = _norm_number(m.group(1))
-    elif not qty_btc:
-        # Fallback: $X solo si no encontramos cantidad BTC explícita
+    # Búsqueda local: $X es ambiguo (puede ser precio gatillo); solo en prefix de acción
+    if not qty_btc and not qty_usdt:
         m = re.search(r"\$\s*([\d]+(?:\.\d+)?[k]?)", head)
         if m:
             qty_usdt = _norm_number(m.group(1))
