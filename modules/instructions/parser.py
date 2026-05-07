@@ -27,9 +27,14 @@ def _norm_number(s: str) -> float:
         return 0.0
 
 
-_BELOW_KEYWORDS = ("baj", "cae", "caer", "drop", "debajo", "menor", "<=", "<", "menos")
-_ABOVE_KEYWORDS = ("sub", "rise", "supera", "encima", "mayor", ">=", ">",
-                   "alcanc", "lleg", "reach", "hit")
+# Stems en español: usar prefijos cortos cubre todas las conjugaciones.
+# Ej: "super" cubre supera/supere/superar/superando/superado.
+_BELOW_KEYWORDS = ("baj", "cae", "caer", "caig", "drop", "debajo", "abajo",
+                   "menor", "<=", "<", "menos", "descien", "descend",
+                   "perd", "pierd")
+_ABOVE_KEYWORDS = ("sub", "rise", "super", "exced", "rebas", "pas",
+                   "encima", "arriba", "mayor", ">=", ">",
+                   "alcanc", "lleg", "reach", "hit", "tope", "techo")
 # Triggers que separan "qué hago" de "cuándo lo hago"
 _CONDITION_TRIGGERS = ("si ", " si", "cuando", "when", "if ")
 
