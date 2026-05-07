@@ -164,6 +164,26 @@ class InstructionCreateIn(BaseModel):
     expires_at: Optional[float] = None
 
 
+# ---------- PnL diario ----------
+class DailyPnL(BaseModel):
+    date: str  # YYYY-MM-DD
+    realized_pnl: float
+    fees: float
+    net_pnl: float          # realized_pnl (ya incluye fees descontados según registrar_trade)
+    trades: int
+    buys: int
+    sells: int
+    partial_sells: int
+    dcas: int
+    starting_balance: float  # estimado al inicio del día
+    pct_of_start: float      # PnL/starting_balance * 100
+
+
+class DailyPnLResponse(BaseModel):
+    days: List[DailyPnL]
+    summary: dict  # totales y promedios
+
+
 # ---------- Logs ----------
 class LogTail(BaseModel):
     lines: List[str]

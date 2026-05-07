@@ -6,6 +6,8 @@ from fastapi import APIRouter, HTTPException, Query
 
 from backend.schemas import (
     AgentDecisionOut,
+    DailyPnL,
+    DailyPnLResponse,
     DashboardSnapshot,
     HealthResponse,
     LogTail,
@@ -170,6 +172,104 @@ def trades(limit: int = Query(50, ge=1, le=500)):
 def decisions(limit: int = Query(20, ge=1, le=200)):
     bs = BotState.get()
     return _build_decisions(bs.snapshot(), limit)
+
+
+@router.get("/pnl-daily", response_model=DailyPnLResponse)
+def pnl_daily(days: int = Query(30, ge=1, le=365)):
+    """Agrega trade_history por día. Devuelve PnL realizado, fees, conteo por
+    tipo, y % sobre el balance estimado al inicio del día."""
+    from collections import defaultdict
+    from datetime import datetime
+    bs = BotState.get()
+    estado = bs.snapshot()
+    capital_inicial = float(estado.get("capital_inicial", 0) or 0)
+    trades = list(estado.get("trade_history", []) or [])
+
+    # Sort cronológicamente
+    def parse_ts(t):
+        try:
+            return datetime.fromisoformat(t.get("timestamp", ""))
+        except Exception:
+            return datetime.min
+    trades.sort(key=parse_ts)
+
+    # Agrupar por día
+    by_day = defaultdict(lambda: {"realized": 0.0, "fees": 0.0, "buys": 0,
+                                   "sells": 0, "partials": 0, "dcas": 0})
+    cum_pnl = 0.0
+    day_starting = {}
+    for t in trades:
+        ts = t.get("timestamp", "")
+        if not ts:
+            continue
+        day = ts[:10]  # YYYY-MM-DD
+        if day not in day_starting:
+            day_starting[day] = capital_inicial + cum_pnl
+        d = by_day[day]
+        action = t.get("action", "")
+        pnl = t.get("pnl")
+        fee = float(t.get("fee") or 0)
+        d["fees"] += fee
+        if action == "BUY":
+            d["buys"] += 1
+        elif action == "DCA":
+            d["dcas"] += 1
+        elif action == "PARTIAL_SELL":
+            d["partials"] += 1
+        elif action == "SELL":
+            d["sells"] += 1
+        if isinstance(pnl, (int, float)):
+            d["realized"] += float(pnl)
+            cum_pnl += float(pnl)
+
+    # Generar lista
+    sorted_days = sorted(by_day.keys())
+    sorted_days = sorted_days[-days:]
+    out_days = []
+    for day in sorted_days:
+        agg = by_day[day]
+        starting = day_starting.get(day, capital_inicial)
+        n_trades = agg["buys"] + agg["sells"] + agg["partials"] + agg["dcas"]
+        out_days.append(
+            DailyPnL(
+                date=day,
+                realized_pnl=round(agg["realized"], 4),
+                fees=round(agg["fees"], 4),
+                net_pnl=round(agg["realized"], 4),
+                trades=n_trades,
+                buys=agg["buys"],
+                sells=agg["sells"],
+                partial_sells=agg["partials"],
+                dcas=agg["dcas"],
+                starting_balance=round(starting, 2),
+                pct_of_start=round(agg["realized"] / starting * 100, 4) if starting > 0 else 0.0,
+            )
+        )
+
+    # Resumen
+    total_pnl = sum(d.realized_pnl for d in out_days)
+    total_fees = sum(d.fees for d in out_days)
+    total_trades = sum(d.trades for d in out_days)
+    positive_days = sum(1 for d in out_days if d.realized_pnl > 0)
+    negative_days = sum(1 for d in out_days if d.realized_pnl < 0)
+    flat_days = sum(1 for d in out_days if d.realized_pnl == 0)
+    avg_pct = sum(d.pct_of_start for d in out_days) / len(out_days) if out_days else 0
+    best = max((d.realized_pnl for d in out_days), default=0)
+    worst = min((d.realized_pnl for d in out_days), default=0)
+
+    summary = {
+        "total_realized_pnl": round(total_pnl, 4),
+        "total_fees": round(total_fees, 4),
+        "total_trades": total_trades,
+        "days_included": len(out_days),
+        "positive_days": positive_days,
+        "negative_days": negative_days,
+        "flat_days": flat_days,
+        "avg_daily_pct": round(avg_pct, 4),
+        "best_day_pnl": round(best, 4),
+        "worst_day_pnl": round(worst, 4),
+    }
+    return DailyPnLResponse(days=out_days, summary=summary)
 
 
 @router.get("/logs", response_model=LogTail)

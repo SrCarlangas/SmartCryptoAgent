@@ -239,7 +239,7 @@ def _ejecutar_compra(plan, precio, balance_total):
     )
     orden = bot.crear_orden(SYMBOL, 'buy', cantidad)
     if orden:
-        precio_real, cantidad_real, costo_real, _ = _extraer_datos_orden(orden)
+        precio_real, cantidad_real, costo_real, fee_compra = _extraer_datos_orden(orden)
         entry_price = precio_real if precio_real > 0 else precio
         net_qty = cantidad_real if cantidad_real > 0 else cantidad * 0.999
         total_cost = costo_real if costo_real > 0 else capital_compra
@@ -258,12 +258,23 @@ def _ejecutar_compra(plan, precio, balance_total):
         estado['positions'].append(new_pos)
         estado['usdt_disponible'] = max(0, usdt_dispo - total_cost)
         registrar_decision_agente(estado, plan.source, "BUY", float(getattr(plan, "confidence", 0.0) or 0.0), plan.reasoning)
+        registrar_trade(estado, "BUY", entry_price, net_qty, pnl=None, fee=fee_compra)
         guardar_estado(estado)
         num = len(estado['positions'])
         logger.info(
             f"✅ Posicion {pos_id} abierta a ${entry_price:.2f} (real) | "
-            f"BTC: {net_qty:.6f} | Costo: ${total_cost:.2f} | Posiciones activas: {num}"
+            f"BTC: {net_qty:.6f} | Costo: ${total_cost:.2f} | Fee: ${fee_compra:.4f} | Posiciones activas: {num}"
         )
+        try:
+            BotState.get().broadcast_trade({
+                "timestamp": time.time(), "action": "BUY",
+                "price": entry_price, "amount": net_qty,
+                "fee": fee_compra, "pnl": None,
+                "position_id": pos_id, "source": plan.source,
+            })
+            BotState.get().broadcast_position_change(estado.get('positions', []))
+        except Exception as e:
+            logger.warning(f"⚠️ broadcast post-BUY: {e}")
 
 
 def _ejecutar_dca(plan, precio):
@@ -288,7 +299,7 @@ def _ejecutar_dca(plan, precio):
         return
     orden = bot.crear_orden(SYMBOL, 'buy', qty_dca)
     if orden:
-        precio_real, cantidad_real, costo_real, _ = _extraer_datos_orden(orden)
+        precio_real, cantidad_real, costo_real, fee_dca = _extraer_datos_orden(orden)
         dca_price = precio_real if precio_real > 0 else precio
         net_qty_dca = cantidad_real if cantidad_real > 0 else qty_dca * 0.999
         dca_cost = costo_real if costo_real > 0 else capital_dca
@@ -304,11 +315,22 @@ def _ejecutar_dca(plan, precio):
         pos['total_invested'] = pos.get('total_invested', 0) + dca_cost
         estado['usdt_disponible'] = max(0, usdt_dispo - dca_cost)
         registrar_decision_agente(estado, plan.source, "DCA", float(getattr(plan, "confidence", 0.0) or 0.0), plan.reasoning)
+        registrar_trade(estado, "DCA", dca_price, net_qty_dca, pnl=None, fee=fee_dca)
         guardar_estado(estado)
         logger.info(
             f"✅ DCA Nivel {nuevo_nivel} [{plan.target_position_id}] a ${dca_price:.2f} (real) | "
-            f"Nuevo Promedio: ${nuevo_promedio:.2f} | BTC: {total_qty:.6f}"
+            f"Nuevo Promedio: ${nuevo_promedio:.2f} | BTC: {total_qty:.6f} | Fee: ${fee_dca:.4f}"
         )
+        try:
+            BotState.get().broadcast_trade({
+                "timestamp": time.time(), "action": "DCA",
+                "price": dca_price, "amount": net_qty_dca,
+                "fee": fee_dca, "pnl": None,
+                "position_id": plan.target_position_id, "source": plan.source,
+            })
+            BotState.get().broadcast_position_change(estado.get('positions', []))
+        except Exception as e:
+            logger.warning(f"⚠️ broadcast post-DCA: {e}")
 
 
 def _ejecutar_venta(plan, precio, cooldown_counter):
@@ -381,6 +403,16 @@ def _ejecutar_venta(plan, precio, cooldown_counter):
     remove_position(estado, plan.target_position_id)
     estado['usdt_disponible'] = estado.get('usdt_disponible', 0) + proceeds_netos
     guardar_estado(estado)
+    try:
+        BotState.get().broadcast_trade({
+            "timestamp": time.time(), "action": "SELL",
+            "price": sell_price, "amount": sold_qty,
+            "fee": fee_venta, "pnl": pnl,
+            "position_id": plan.target_position_id, "source": plan.source,
+        })
+        BotState.get().broadcast_position_change(estado.get('positions', []))
+    except Exception as e:
+        logger.warning(f"⚠️ broadcast post-SELL: {e}")
 
     # PnL real acumulado basado en balance (siempre correcto)
     capital_ini = estado.get('capital_inicial', 0)
@@ -492,6 +524,16 @@ def _ejecutar_venta_parcial(plan, precio, cooldown_counter):
 
     estado['usdt_disponible'] = estado.get('usdt_disponible', 0) + proceeds_netos
     guardar_estado(estado)
+    try:
+        BotState.get().broadcast_trade({
+            "timestamp": time.time(), "action": "PARTIAL_SELL",
+            "price": precio_real or precio, "amount": sold_qty,
+            "fee": fee_venta, "pnl": pnl_parcial,
+            "position_id": plan.target_position_id, "source": plan.source,
+        })
+        BotState.get().broadcast_position_change(estado.get('positions', []))
+    except Exception as e:
+        logger.warning(f"⚠️ broadcast post-PARTIAL: {e}")
 
     # PnL real acumulado
     capital_ini = estado.get('capital_inicial', 0)

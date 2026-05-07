@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { api } from '../api/client';
 import { useBotStore } from '../store/botStore';
 import type { WSEvent } from '../api/types';
 
@@ -10,6 +11,23 @@ export function useBotWebSocket() {
   const applyTick = useBotStore((s) => s.applyTick);
   const setMode = useBotStore((s) => s.setMode);
   const setRestart = useBotStore((s) => s.setRestart);
+  const setDashboard = useBotStore((s) => s.setDashboard);
+  const refreshTimerRef = useRef<number | null>(null);
+
+  function debouncedRefresh() {
+    if (refreshTimerRef.current !== null) {
+      clearTimeout(refreshTimerRef.current);
+    }
+    refreshTimerRef.current = window.setTimeout(async () => {
+      refreshTimerRef.current = null;
+      try {
+        const d = await api.dashboard();
+        setDashboard(d);
+      } catch {
+        // ignore
+      }
+    }, 500);
+  }
 
   const wsRef = useRef<WebSocket | null>(null);
   const retryRef = useRef(0);
@@ -54,10 +72,13 @@ export function useBotWebSocket() {
               });
               break;
             case 'instruction_event':
+              window.dispatchEvent(new CustomEvent('bot:ws', { detail: msg }));
+              break;
             case 'trade_executed':
             case 'position_change':
-              // El próximo polling refrescará los datos;
-              // los listeners de InstructionsPage también pueden refrescar.
+              // Refresca dashboard rápidamente para reflejar nuevas
+              // posiciones / trades sin esperar el polling de 15s.
+              debouncedRefresh();
               window.dispatchEvent(new CustomEvent('bot:ws', { detail: msg }));
               break;
           }

@@ -179,6 +179,39 @@ export interface ParameterUpdateOut {
   restart_in_seconds_max: number;
 }
 
+// ---------- PnL diario ----------
+export interface DailyPnL {
+  date: string;
+  realized_pnl: number;
+  fees: number;
+  net_pnl: number;
+  trades: number;
+  buys: number;
+  sells: number;
+  partial_sells: number;
+  dcas: number;
+  starting_balance: number;
+  pct_of_start: number;
+}
+
+export interface DailyPnLSummary {
+  total_realized_pnl: number;
+  total_fees: number;
+  total_trades: number;
+  days_included: number;
+  positive_days: number;
+  negative_days: number;
+  flat_days: number;
+  avg_daily_pct: number;
+  best_day_pnl: number;
+  worst_day_pnl: number;
+}
+
+export interface DailyPnLResponse {
+  days: DailyPnL[];
+  summary: DailyPnLSummary;
+}
+
 export interface TickPayload {
   price: number;
   regime: string;

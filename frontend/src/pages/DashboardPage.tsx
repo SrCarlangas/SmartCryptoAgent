@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { api } from '../api/client';
+import { DailyPnLTable } from '../components/DailyPnLTable';
 import { PnLCard } from '../components/PnLCard';
 import { PositionsTable } from '../components/PositionsTable';
 import { PriceChart } from '../components/PriceChart';
@@ -63,12 +64,21 @@ export function DashboardPage() {
       <PriceChart />
 
       <section>
-        <h2 className="text-sm uppercase tracking-wider text-slate-400 mb-2">Posiciones abiertas</h2>
+        <h2 className="text-sm uppercase tracking-wider text-slate-400 mb-2">
+          Posiciones abiertas <span className="text-slate-600 normal-case text-xs">({dashboard.positions.length})</span>
+        </h2>
         <PositionsTable positions={dashboard.positions} />
       </section>
 
       <section>
-        <h2 className="text-sm uppercase tracking-wider text-slate-400 mb-2">Trades recientes</h2>
+        <h2 className="text-sm uppercase tracking-wider text-slate-400 mb-2">PnL histórico por día</h2>
+        <DailyPnLTable />
+      </section>
+
+      <section>
+        <h2 className="text-sm uppercase tracking-wider text-slate-400 mb-2">
+          Trades recientes <span className="text-slate-600 normal-case text-xs">({dashboard.recent_trades.length})</span>
+        </h2>
         <TradesTable trades={dashboard.recent_trades} />
       </section>
 

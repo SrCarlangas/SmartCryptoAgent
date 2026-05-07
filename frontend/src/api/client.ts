@@ -1,6 +1,7 @@
 import type {
   ConfigOut,
   ConfigSaveResponse,
+  DailyPnLResponse,
   DashboardSnapshot,
   InstructionOut,
   InstructionPreviewOut,
@@ -70,4 +71,6 @@ export const api = {
     request<ParameterValueOut>(`/api/parameters/${encodeURIComponent(key)}/reset`, {
       method: 'POST',
     }),
+
+  pnlDaily: (days = 30) => request<DailyPnLResponse>(`/api/pnl-daily?days=${days}`),
 };
