@@ -870,7 +870,13 @@ def main():
             time.sleep(PAUSA)
 
         except Exception as e:
+            import traceback
             logger.error(f"❌ Error Loop: {e}")
+            # Solo loguea el último frame del traceback (ruido controlado)
+            tb = traceback.extract_tb(e.__traceback__)
+            if tb:
+                last = tb[-1]
+                logger.error(f"   en {last.filename.split('/')[-1]}:{last.lineno} → {last.line}")
             time.sleep(10)
 
 
