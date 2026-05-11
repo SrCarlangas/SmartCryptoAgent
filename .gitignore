@@ -7,6 +7,8 @@ venv/
 # Archivos de estado locales
 state.json
 bot_state.json
+instructions.json
+parameters.json
 __pycache__/
 
 # archivo temporal
@@ -15,3 +17,11 @@ binancekey.txt
 #logs
 bot.log
 botHist.log
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
+frontend/vite.config.d.ts
+frontend/vite.config.js

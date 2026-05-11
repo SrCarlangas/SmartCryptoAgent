@@ -6,8 +6,19 @@ from modules.logger import logger
 from config import (
     AGENT_MODE, AGENT_MIN_CONFIDENCE,
     REGIME_PARAMS, DCA_BASE_UNIT_PCT, HARD_STOP_LOSS_PCT,
-    MIN_PROFIT_AFTER_FEES_PCT,
+    MIN_PROFIT_AFTER_FEES_PCT, MIN_PROFIT_SCALED_EXIT_PCT,
 )
+
+
+def _min_profit_threshold(sell_pct: float) -> float:
+    """Devuelve el umbral mínimo de ROI para permitir una venta.
+    PARTIAL_SELL (sell_pct < 1.0) usa un threshold más laxo porque la idea
+    es lock-in parcial; el SELL final mantiene MIN_PROFIT_AFTER_FEES_PCT
+    para cubrir fees de round-trip.
+    """
+    if sell_pct is not None and 0 < sell_pct < 1.0:
+        return MIN_PROFIT_SCALED_EXIT_PCT
+    return MIN_PROFIT_AFTER_FEES_PCT
 
 
 class AgentOrchestrator:
@@ -25,6 +36,30 @@ class AgentOrchestrator:
 
     def decide(self, ctx: MarketContext, velas_15m=None, velas_1h=None) -> ExecutionPlan:
         plan = ExecutionPlan()
+
+        # 0. Override por instrucción del usuario (modo INSTRUCTION).
+        # Si hay una instrucción activa cuyas condiciones se cumplen, ejecuta
+        # ese plan bypassando reglas/agente. HARD_STOP_LOSS sigue activo via
+        # _check_hard_limits() en main.py (corre ANTES de orchestrator.decide).
+        try:
+            from modules.instructions.executor import InstructionExecutor
+            inst_plan = InstructionExecutor.get_singleton().evaluate(ctx)
+        except Exception as e:
+            logger.warning(f"⚠️ InstructionExecutor error: {e}")
+            inst_plan = None
+        if inst_plan is not None:
+            inst_plan.source = "instruction"
+            approved, veto_reason = self.risk_manager.validate_capital_only(inst_plan, ctx)
+            if not approved:
+                logger.info(f"🛡️ Instruction blocked: {veto_reason}")
+                inst_plan.vetoed = True
+                inst_plan.veto_reason = f"Instruction blocked: {veto_reason}"
+            else:
+                logger.info(
+                    f"📜 INSTRUCTION action={inst_plan.action} "
+                    f"target={inst_plan.target_position_id or '-'} | reasoning: {inst_plan.reasoning}"
+                )
+            return inst_plan
 
         # 1. SIEMPRE pre-computar recomendacion de reglas (costo $0)
         rules_decision = self._get_rules_decision(ctx, velas_15m, velas_1h)
@@ -53,6 +88,18 @@ class AgentOrchestrator:
 
             if agent_decision.source in ("rules_api_failure", "rules_llm_failure"):
                 logger.info(f"🔄 LLM no disponible, usando reglas directamente")
+                approved, veto_reason = self.risk_manager.validate_decision(rules_decision, ctx)
+                if not approved:
+                    self._consecutive_vetos += 1
+                    self._last_veto_action = rules_decision.action
+                    logger.info(
+                        f"🛡️ RISK GUARDIAN VETO ({self._consecutive_vetos}x): {veto_reason}"
+                    )
+                    plan.vetoed = True
+                    plan.veto_reason = veto_reason
+                    return plan
+                self._consecutive_vetos = 0
+                self._last_veto_action = ""
                 return self._decision_to_plan(rules_decision, ctx)
 
             # Log si el agente difiere de las reglas
@@ -100,16 +147,18 @@ class AgentOrchestrator:
                     )
                     return self._decision_to_plan(rules_decision, ctx)
 
-            # Bloquear SELL con ROI < MIN_PROFIT (excepto stop-loss)
+            # Bloquear SELL/PARTIAL_SELL con ROI < MIN_PROFIT (excepto stop-loss).
+            # Fase 2: PARTIAL_SELL usa threshold más laxo (MIN_PROFIT_SCALED_EXIT_PCT).
             if agent_decision.action in ("SELL", "PARTIAL_SELL"):
                 pos = self.risk_manager._find_position(ctx, agent_decision.target_position_id)
-                if pos and pos.roi_current < MIN_PROFIT_AFTER_FEES_PCT:
+                threshold = _min_profit_threshold(agent_decision.sell_pct)
+                if pos and pos.roi_current < threshold:
                     regime_cfg = REGIME_PARAMS.get(ctx.regime, REGIME_PARAMS.get("LATERAL", {}))
                     sl_pct = regime_cfg.get("sl_pct", 0.08)
                     if pos.roi_current > -sl_pct and pos.roi_current > -HARD_STOP_LOSS_PCT:
                         logger.info(
-                            f"⏸️ SELL bloqueado: ROI {pos.roi_current*100:.2f}% "
-                            f"< min {MIN_PROFIT_AFTER_FEES_PCT*100:.1f}% "
+                            f"⏸️ {agent_decision.action} bloqueado: ROI {pos.roi_current*100:.2f}% "
+                            f"< min {threshold*100:.2f}% "
                             f"[{agent_decision.target_position_id}]"
                         )
                         return self._decision_to_plan(rules_decision, ctx)
@@ -136,18 +185,27 @@ class AgentOrchestrator:
             agent_decision = self._get_agent_decision(ctx, rules_decision)
 
             if agent_decision.source in ("rules_api_failure", "rules_llm_failure"):
+                logger.info(f"🔄 LLM no disponible, usando reglas directamente")
+                approved, veto_reason = self.risk_manager.validate_decision(rules_decision, ctx)
+                if not approved:
+                    logger.info(f"🛡️ RISK GUARDIAN VETO: {veto_reason}")
+                    plan.vetoed = True
+                    plan.veto_reason = veto_reason
+                    return plan
                 return self._decision_to_plan(rules_decision, ctx)
 
-            # Bloquear SELL con ROI < MIN_PROFIT (excepto stop-loss)
+            # Bloquear SELL/PARTIAL_SELL con ROI < MIN_PROFIT (excepto stop-loss).
+            # Fase 2: PARTIAL_SELL usa threshold más laxo (MIN_PROFIT_SCALED_EXIT_PCT).
             if agent_decision.action in ("SELL", "PARTIAL_SELL"):
                 pos = self.risk_manager._find_position(ctx, agent_decision.target_position_id)
-                if pos and pos.roi_current < MIN_PROFIT_AFTER_FEES_PCT:
+                threshold = _min_profit_threshold(agent_decision.sell_pct)
+                if pos and pos.roi_current < threshold:
                     regime_cfg = REGIME_PARAMS.get(ctx.regime, REGIME_PARAMS.get("LATERAL", {}))
                     sl_pct = regime_cfg.get("sl_pct", 0.08)
                     if pos.roi_current > -sl_pct and pos.roi_current > -HARD_STOP_LOSS_PCT:
                         logger.info(
-                            f"⏸️ SELL bloqueado: ROI {pos.roi_current*100:.2f}% "
-                            f"< min {MIN_PROFIT_AFTER_FEES_PCT*100:.1f}%"
+                            f"⏸️ {agent_decision.action} bloqueado: ROI {pos.roi_current*100:.2f}% "
+                            f"< min {threshold*100:.2f}%"
                         )
                         return self._decision_to_plan(rules_decision, ctx)
 
@@ -216,11 +274,13 @@ class AgentOrchestrator:
             )
             if exits:
                 trigger_name, sell_pct = exits[0]  # una a la vez
-                # No vender si ganancia no cubre fees (excepto SL ya evaluados arriba)
-                if p.roi_current < MIN_PROFIT_AFTER_FEES_PCT:
+                # Fase 2: scaled exits usan threshold más laxo cuando es parcial.
+                # No vender si ganancia no cubre el threshold (excepto SL ya evaluados arriba).
+                threshold = _min_profit_threshold(sell_pct)
+                if p.roi_current < threshold:
                     logger.info(
                         f"⏸️ Exit {trigger_name} bloqueado: ROI {p.roi_current*100:.2f}% "
-                        f"< min {MIN_PROFIT_AFTER_FEES_PCT*100:.1f}% [{p.id}]"
+                        f"< min {threshold*100:.2f}% [{p.id}]"
                     )
                     continue
                 if sell_pct >= 1.0:
@@ -368,8 +428,9 @@ class AgentOrchestrator:
         plan = ExecutionPlan()
         plan.action = decision.action
         plan.target_position_id = decision.target_position_id
-        plan.reasoning = decision.reasoning
+        plan.reasoning = decision.reasoning or self._default_reasoning(decision, ctx)
         plan.source = decision.source
+        plan.confidence = float(getattr(decision, "confidence", 0.0) or 0.0)
         plan.sell_pct = decision.sell_pct
         plan.exit_trigger = decision.exit_trigger
 
@@ -380,6 +441,25 @@ class AgentOrchestrator:
                 plan.quantity = plan.capital / ctx.price
 
         return plan
+
+    def _default_reasoning(self, decision: TradingDecision, ctx: MarketContext) -> str:
+        """Construye un reasoning descriptivo cuando el LLM responde sin texto.
+        Útil para auditar decisiones HOLD silenciosas.
+        """
+        action = decision.action or "HOLD"
+        regime = getattr(ctx, "regime", "?")
+        rsi = getattr(ctx, "rsi_14", None)
+        rsi_w = getattr(ctx, "rsi_weekly", None)
+        portfolio_pnl_pct = getattr(ctx, "portfolio_pnl_pct", None)
+        bits = [f"{action} en régimen {regime}"]
+        if isinstance(rsi, (int, float)):
+            bits.append(f"RSI:{rsi:.0f}")
+        if isinstance(rsi_w, (int, float)):
+            bits.append(f"RSI_w:{rsi_w:.0f}")
+        if isinstance(portfolio_pnl_pct, (int, float)) and portfolio_pnl_pct:
+            bits.append(f"PnL:{portfolio_pnl_pct*100:+.1f}%")
+        bits.append(f"src:{decision.source}")
+        return "(auto) " + " | ".join(bits)
 
     def _log_comparison(self, agent: TradingDecision, rules: TradingDecision):
         match = "✅ COINCIDEN" if agent.action == rules.action else "❌ DIFIEREN"

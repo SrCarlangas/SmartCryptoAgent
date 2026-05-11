@@ -70,6 +70,8 @@ def build_analysis_prompt(ctx: MarketContext, rules_recommendation: TradingDecis
         # Restricciones de accion según estado
         if not dca_available:
             pos_lines += "\n⚠️ DCA no disponible: todas las posiciones en nivel maximo"
+        if ctx.available_slots == 0:
+            pos_lines += "\n⚠️ BUY bloqueado: 0 slots. Solo SELL, DCA o HOLD."
     else:
         pos_lines = (
             f"POS(0/{ctx.available_slots}):VACIO"

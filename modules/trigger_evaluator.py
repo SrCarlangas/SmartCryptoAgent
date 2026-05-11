@@ -13,6 +13,14 @@ class TriggerEvaluator:
         self.last_price = 0.0
         self.last_price_trigger_time = 0.0
         self.last_regime = "LATERAL"
+        self._cooldowns: dict = {}  # key → timestamp del último disparo
+
+    def _cd_ok(self, key: str, secs: float) -> bool:
+        """True si el cooldown pasó; registra el disparo. Evita re-disparar triggers de nivel sostenido."""
+        if time.time() - self._cooldowns.get(key, 0) >= secs:
+            self._cooldowns[key] = time.time()
+            return True
+        return False
 
     def should_call_agent(self, ctx: MarketContext) -> bool:
         now = time.time()
@@ -43,15 +51,15 @@ class TriggerEvaluator:
         all_positions = ctx.positions  # incluye frozen desde market_data fix
         if all_positions:
             for p in all_positions:
-                # ROI cruza TP (aplica a activas y frozen)
-                if p.roi_current >= TAKE_PROFIT_PCT:
+                # ROI cruza TP (aplica a activas y frozen) — cooldown 10min para no spamear LLM
+                if p.roi_current >= TAKE_PROFIT_PCT and self._cd_ok(f"tp_{p.id}", 600):
                     reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza TP")
                     triggered = True
 
-                # Trailing stop: precio cae desde pico con trailing activo (incluye frozen)
+                # Trailing stop: precio cae desde pico con trailing activo — cooldown 5min
                 if p.peak_price > 0 and p.roi_current >= 0.007:
                     drop_from_peak = (p.peak_price - ctx.price) / p.peak_price
-                    if drop_from_peak >= 0.003:  # caida >=0.3% desde pico → avisar
+                    if drop_from_peak >= 0.003 and self._cd_ok(f"trail_{p.id}", 300):
                         reasons.append(
                             f"[{p.id}] Trailing: -{drop_from_peak*100:.2f}% desde pico ${p.peak_price:.0f}"
                         )
@@ -62,12 +70,12 @@ class TriggerEvaluator:
                     reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza 30% (scaled exit)")
                     triggered = True
 
-                # DCA triggers solo en posiciones activas (no frozen)
+                # DCA triggers solo en posiciones activas (no frozen) — cooldown 10min
                 if not getattr(p, 'is_frozen', False):
-                    if p.dca_level == 0 and p.roi_current <= -DCA_NIVEL_1_DROP:
+                    if p.dca_level == 0 and p.roi_current <= -DCA_NIVEL_1_DROP and self._cd_ok(f"dca1_{p.id}", 600):
                         reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza DCA1")
                         triggered = True
-                    elif p.dca_level == 1 and p.roi_current <= -DCA_NIVEL_2_DROP:
+                    elif p.dca_level == 1 and p.roi_current <= -DCA_NIVEL_2_DROP and self._cd_ok(f"dca2_{p.id}", 600):
                         reasons.append(f"[{p.id}] ROI {p.roi_current*100:.1f}% cruza DCA2")
                         triggered = True
 
@@ -113,8 +121,8 @@ class TriggerEvaluator:
                 reasons.append("Periodico 5min (sin posiciones)")
                 triggered = True
 
-        # --- RSI semanal cruza 75 (scaled exit) ---
-        if ctx.rsi_weekly > 75 and ctx.num_positions > 0:
+        # --- RSI semanal cruza 75 (scaled exit) — cooldown 15min ---
+        if ctx.rsi_weekly > 75 and ctx.num_positions > 0 and self._cd_ok("rsi_w_75", 900):
             reasons.append(f"RSI semanal > 75 ({ctx.rsi_weekly:.1f})")
             triggered = True
 

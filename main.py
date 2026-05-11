@@ -1,5 +1,7 @@
 import argparse
 import math
+import os
+import sys
 import time
 from modules.binance_api import BinanceConnector
 from modules.strategy import EstrategiaSmartDCA
@@ -24,9 +26,13 @@ from config import (
     TAKE_PROFIT_PCT, STOP_LOSS_GLOBAL_PCT, HARD_STOP_LOSS_PCT,
     DCA_NIVEL_1_DROP, DCA_NIVEL_2_DROP,
     MAX_PORTFOLIO_EXPOSURE, COOLDOWN_AFTER_SL, COOLDOWN_AFTER_WIN,
-    AGENT_MODE, MIN_POSITION_CAPITAL,
+    AGENT_MODE, MIN_POSITION_CAPITAL, MIN_DCA_CAPITAL,
     MAX_CONCURRENT_POSITIONS, REGIME_PARAMS,
+    API_HOST, API_PORT,
 )
+from backend.server import start_api_thread
+from backend.state_bridge import BotState
+from modules.instructions.executor import InstructionExecutor
 
 bot = BinanceConnector()
 estrategia = EstrategiaSmartDCA()
@@ -36,6 +42,58 @@ orchestrator = AgentOrchestrator(risk_manager, estrategia)
 regime_detector = RegimeDetector()
 
 estado = cargar_estado()
+BotState.initialize(estado)
+
+
+def _emit_instruction_event(event_type: str, payload: dict):
+    """Bridge: InstructionExecutor → BotState/WebSocket broadcasts."""
+    try:
+        bs = BotState.get()
+        bs.broadcast_instruction_event(event_type, payload)
+        if event_type in ("completed", "expired", "cancelled"):
+            bs.set_mode("NORMAL", None)
+        elif event_type == "triggered":
+            inst_id = payload.get("instruction_id")
+            if inst_id:
+                bs.set_mode("INSTRUCTION", inst_id)
+    except Exception as e:
+        logger.warning(f"⚠️ Error emitiendo evento de instrucción: {e}")
+
+
+InstructionExecutor.get_singleton().set_event_callback(_emit_instruction_event)
+
+
+def _sync_mode_from_store():
+    """Lee el store y sincroniza el modo actual del BotState al arrancar."""
+    try:
+        from modules.instructions.store import InstructionStore
+        active = InstructionStore.get_singleton().get_active()
+        bs = BotState.get()
+        if active:
+            bs.set_mode("INSTRUCTION", active.id)
+        else:
+            bs.set_mode("NORMAL", None)
+    except Exception:
+        pass
+
+
+def _ctx_to_tick_dict(ctx, balance_total: float) -> dict:
+    """Serializa MarketContext a un dict ligero para WS clients."""
+    return {
+        "price": float(getattr(ctx, "price", 0) or 0),
+        "regime": getattr(ctx, "regime", "LATERAL"),
+        "regime_confidence": float(getattr(ctx, "regime_confidence", 0) or 0),
+        "balance_total": float(balance_total or 0),
+        "usdt_disponible": float(getattr(ctx, "usdt_disponible", 0) or 0),
+        "portfolio_pnl": float(getattr(ctx, "portfolio_pnl", 0) or 0),
+        "portfolio_pnl_pct": float(getattr(ctx, "portfolio_pnl_pct", 0) or 0),
+        "rsi_14": float(getattr(ctx, "rsi_14", 50) or 50),
+        "rsi_weekly": float(getattr(ctx, "rsi_weekly", 50) or 50),
+        "available_slots": int(getattr(ctx, "available_slots", 0) or 0),
+        "num_positions": int(getattr(ctx, "num_positions", 0) or 0),
+        "exposure_pct": float(getattr(ctx, "exposure_pct", 0) or 0),
+        "cooldown_active": bool(getattr(ctx, "cooldown_active", False)),
+    }
 
 
 def _truncar_btc(cantidad):
@@ -181,7 +239,7 @@ def _ejecutar_compra(plan, precio, balance_total):
     )
     orden = bot.crear_orden(SYMBOL, 'buy', cantidad)
     if orden:
-        precio_real, cantidad_real, costo_real, _ = _extraer_datos_orden(orden)
+        precio_real, cantidad_real, costo_real, fee_compra = _extraer_datos_orden(orden)
         entry_price = precio_real if precio_real > 0 else precio
         net_qty = cantidad_real if cantidad_real > 0 else cantidad * 0.999
         total_cost = costo_real if costo_real > 0 else capital_compra
@@ -199,13 +257,24 @@ def _ejecutar_compra(plan, precio, balance_total):
         }
         estado['positions'].append(new_pos)
         estado['usdt_disponible'] = max(0, usdt_dispo - total_cost)
-        registrar_decision_agente(estado, plan.source, "BUY", 0.0, plan.reasoning)
+        registrar_decision_agente(estado, plan.source, "BUY", float(getattr(plan, "confidence", 0.0) or 0.0), plan.reasoning)
+        registrar_trade(estado, "BUY", entry_price, net_qty, pnl=None, fee=fee_compra)
         guardar_estado(estado)
         num = len(estado['positions'])
         logger.info(
             f"✅ Posicion {pos_id} abierta a ${entry_price:.2f} (real) | "
-            f"BTC: {net_qty:.6f} | Costo: ${total_cost:.2f} | Posiciones activas: {num}"
+            f"BTC: {net_qty:.6f} | Costo: ${total_cost:.2f} | Fee: ${fee_compra:.4f} | Posiciones activas: {num}"
         )
+        try:
+            BotState.get().broadcast_trade({
+                "timestamp": time.time(), "action": "BUY",
+                "price": entry_price, "amount": net_qty,
+                "fee": fee_compra, "pnl": None,
+                "position_id": pos_id, "source": plan.source,
+            })
+            BotState.get().broadcast_position_change(estado.get('positions', []))
+        except Exception as e:
+            logger.warning(f"⚠️ broadcast post-BUY: {e}")
 
 
 def _ejecutar_dca(plan, precio):
@@ -219,7 +288,7 @@ def _ejecutar_dca(plan, precio):
     capital_dca = min(plan.capital, usdt_dispo * 0.98)
     nuevo_nivel = pos.get('dca_level', 0) + 1
 
-    if capital_dca < MIN_POSITION_CAPITAL or usdt_dispo < capital_dca * 0.95:
+    if capital_dca < MIN_DCA_CAPITAL or usdt_dispo < capital_dca * 0.95:
         logger.info(f"⚠️ Capital insuficiente para DCA: {capital_dca:.2f} USDT")
         return
 
@@ -230,7 +299,7 @@ def _ejecutar_dca(plan, precio):
         return
     orden = bot.crear_orden(SYMBOL, 'buy', qty_dca)
     if orden:
-        precio_real, cantidad_real, costo_real, _ = _extraer_datos_orden(orden)
+        precio_real, cantidad_real, costo_real, fee_dca = _extraer_datos_orden(orden)
         dca_price = precio_real if precio_real > 0 else precio
         net_qty_dca = cantidad_real if cantidad_real > 0 else qty_dca * 0.999
         dca_cost = costo_real if costo_real > 0 else capital_dca
@@ -245,12 +314,23 @@ def _ejecutar_dca(plan, precio):
         pos['dca_level'] = nuevo_nivel
         pos['total_invested'] = pos.get('total_invested', 0) + dca_cost
         estado['usdt_disponible'] = max(0, usdt_dispo - dca_cost)
-        registrar_decision_agente(estado, plan.source, "DCA", 0.0, plan.reasoning)
+        registrar_decision_agente(estado, plan.source, "DCA", float(getattr(plan, "confidence", 0.0) or 0.0), plan.reasoning)
+        registrar_trade(estado, "DCA", dca_price, net_qty_dca, pnl=None, fee=fee_dca)
         guardar_estado(estado)
         logger.info(
             f"✅ DCA Nivel {nuevo_nivel} [{plan.target_position_id}] a ${dca_price:.2f} (real) | "
-            f"Nuevo Promedio: ${nuevo_promedio:.2f} | BTC: {total_qty:.6f}"
+            f"Nuevo Promedio: ${nuevo_promedio:.2f} | BTC: {total_qty:.6f} | Fee: ${fee_dca:.4f}"
         )
+        try:
+            BotState.get().broadcast_trade({
+                "timestamp": time.time(), "action": "DCA",
+                "price": dca_price, "amount": net_qty_dca,
+                "fee": fee_dca, "pnl": None,
+                "position_id": plan.target_position_id, "source": plan.source,
+            })
+            BotState.get().broadcast_position_change(estado.get('positions', []))
+        except Exception as e:
+            logger.warning(f"⚠️ broadcast post-DCA: {e}")
 
 
 def _ejecutar_venta(plan, precio, cooldown_counter):
@@ -323,6 +403,16 @@ def _ejecutar_venta(plan, precio, cooldown_counter):
     remove_position(estado, plan.target_position_id)
     estado['usdt_disponible'] = estado.get('usdt_disponible', 0) + proceeds_netos
     guardar_estado(estado)
+    try:
+        BotState.get().broadcast_trade({
+            "timestamp": time.time(), "action": "SELL",
+            "price": sell_price, "amount": sold_qty,
+            "fee": fee_venta, "pnl": pnl,
+            "position_id": plan.target_position_id, "source": plan.source,
+        })
+        BotState.get().broadcast_position_change(estado.get('positions', []))
+    except Exception as e:
+        logger.warning(f"⚠️ broadcast post-SELL: {e}")
 
     # PnL real acumulado basado en balance (siempre correcto)
     capital_ini = estado.get('capital_inicial', 0)
@@ -434,6 +524,16 @@ def _ejecutar_venta_parcial(plan, precio, cooldown_counter):
 
     estado['usdt_disponible'] = estado.get('usdt_disponible', 0) + proceeds_netos
     guardar_estado(estado)
+    try:
+        BotState.get().broadcast_trade({
+            "timestamp": time.time(), "action": "PARTIAL_SELL",
+            "price": precio_real or precio, "amount": sold_qty,
+            "fee": fee_venta, "pnl": pnl_parcial,
+            "position_id": plan.target_position_id, "source": plan.source,
+        })
+        BotState.get().broadcast_position_change(estado.get('positions', []))
+    except Exception as e:
+        logger.warning(f"⚠️ broadcast post-PARTIAL: {e}")
 
     # PnL real acumulado
     capital_ini = estado.get('capital_inicial', 0)
@@ -484,15 +584,23 @@ def main():
     logger.info("=" * 70)
     logger.info("🤖 SmartCryptoAgent v4 — Anti-Peak-Buying Edition")
     logger.info(f"   Modo: {AGENT_MODE} | Hard SL: -{HARD_STOP_LOSS_PCT*100:.0f}%")
-    logger.info("   ✅ Peak Guard: bloquea BUY si precio <1% del swing_high 48h")
+    logger.info("   ✅ Peak Guard: bloquea BUY si precio <1.5% del swing_high 48h")
     logger.info("   ✅ ADX Filter: bloquea BUY si 1h -DI > +DI + 5 pts (bajista)")
     logger.info("   ✅ ALCISTA MOMENTUM RSI: 35-55 (era 35-65)")
-    logger.info("   ✅ Cooldown post-win: 20 ciclos / 10 min (era 2 / 1 min)")
+    logger.info("   ✅ Cooldown post-win: 5 ciclos / 2.5 min (era 20 / 10 min)")
     logger.info("   ✅ Anti-fragmentación PARTIAL_SELL: máx 2 transacciones")
     logger.info("   ✅ LATERAL MOMENTUM RSI: 35-65 (era 35-62)")
     if sell_floor:
         logger.info(f"   🎯 SELL FLOOR ACTIVO: ${sell_floor:,.2f} — liquidará TODO cuando BTC ≥ ese precio")
     logger.info("=" * 70)
+
+    # Lanzar API server para el panel de control
+    try:
+        start_api_thread(host=API_HOST, port=API_PORT)
+        logger.info(f"🌐 Dashboard API: http://{API_HOST}:{API_PORT}/api/docs")
+    except Exception as e:
+        logger.error(f"❌ No se pudo iniciar el API server: {e}")
+    _sync_mode_from_store()
 
     precio_inicial = None
     for _ in range(5):
@@ -507,6 +615,27 @@ def main():
     ciclo_count = 0
     while True:
         try:
+            # Reinicio programado por el panel: re-ejecuta el proceso para que
+            # main() arranque de cero, lo que recarga config.py (con los nuevos
+            # valores de parameters.json) y vuelve a llamar reconciliar_estado()
+            # con los saldos reales. os.execv reemplaza el proceso (PID estable).
+            try:
+                if BotState.is_initialized() and BotState.get().is_restart_requested():
+                    info = BotState.get().get_restart_info()
+                    logger.info("=" * 70)
+                    logger.info(f"♻️ REINICIO PROGRAMADO: {info.get('reason', '')}")
+                    logger.info("   Persistiendo estado y re-ejecutando proceso...")
+                    try:
+                        guardar_estado(estado)
+                    except Exception as e:
+                        logger.warning(f"   No se pudo persistir estado antes del reinicio: {e}")
+                    logger.info("   El nuevo proceso ejecutará reconciliar_estado() en el arranque.")
+                    logger.info("=" * 70)
+                    time.sleep(0.8)  # margen para que el WS broadcast llegue al panel
+                    os.execv(sys.executable, [sys.executable, *sys.argv])
+            except Exception as e:
+                logger.error(f"❌ Error al ejecutar reinicio: {e}")
+
             ciclo_count += 1
             precio = bot.obtener_precio(SYMBOL)
             if not precio:
@@ -692,16 +821,18 @@ def main():
                     logger.info(f"👀 Escaneando | P:{precio:.2f} | Posiciones: 0")
 
                 trigger_eval.force_update(ctx)
+                BotState.get().broadcast_tick(_ctx_to_tick_dict(ctx, balance_total))
                 time.sleep(PAUSA)
                 continue
 
             # === DECISION AGENTICA ===
             plan = orchestrator.decide(ctx, velas_15m, velas_1h)
 
-            registrar_decision_agente(estado, plan.source, plan.action, 0.0, plan.reasoning)
+            registrar_decision_agente(estado, plan.source, plan.action, float(getattr(plan, "confidence", 0.0) or 0.0), plan.reasoning)
 
             if plan.vetoed:
                 logger.info(f"🛡️ Decision vetada: {plan.veto_reason}")
+                BotState.get().broadcast_tick(_ctx_to_tick_dict(ctx, balance_total))
                 time.sleep(PAUSA)
                 continue
 
@@ -735,10 +866,17 @@ def main():
                 else:
                     cooldown_counter = _ejecutar_venta_parcial(plan, precio, cooldown_counter)
 
+            BotState.get().broadcast_tick(_ctx_to_tick_dict(ctx, balance_total))
             time.sleep(PAUSA)
 
         except Exception as e:
+            import traceback
             logger.error(f"❌ Error Loop: {e}")
+            # Solo loguea el último frame del traceback (ruido controlado)
+            tb = traceback.extract_tb(e.__traceback__)
+            if tb:
+                last = tb[-1]
+                logger.error(f"   en {last.filename.split('/')[-1]}:{last.lineno} → {last.line}")
             time.sleep(10)
 
 
