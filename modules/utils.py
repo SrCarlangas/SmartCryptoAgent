@@ -234,12 +234,18 @@ def get_recent_trades_summary(estado) -> str:
         return "HISTORIAL: Sin trades recientes."
 
     lines = ["HISTORIAL RECIENTE:"]
-    wins = sum(1 for t in history if t.get('pnl') and t['pnl'] > 0)
-    losses = sum(1 for t in history if t.get('pnl') and t['pnl'] < 0)
+    # Filtrar None: BUY/DCA tienen pnl=None (no es una venta cerrada)
+    wins = sum(1 for t in history if t.get('pnl') is not None and t['pnl'] > 0)
+    losses = sum(1 for t in history if t.get('pnl') is not None and t['pnl'] < 0)
     lines.append(f"  Ultimos {len(history)} trades: {wins} ganados, {losses} perdidos")
 
     last = history[-1]
-    result = "ganado" if last.get('pnl', 0) > 0 else "perdido"
-    lines.append(f"  Ultimo: {last['action']} a ${last['price']:.2f} ({result})")
+    last_pnl = last.get('pnl')
+    if last_pnl is None:
+        # BUY/DCA: no hay pnl asociado
+        result = "apertura/DCA"
+    else:
+        result = "ganado" if last_pnl > 0 else "perdido"
+    lines.append(f"  Ultimo: {last.get('action','?')} a ${last.get('price',0):.2f} ({result})")
 
     return "\n".join(lines)
