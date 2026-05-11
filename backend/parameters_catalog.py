@@ -201,13 +201,28 @@ PARAMETER_CATALOG: List[ParamDef] = [
     },
     {
         "key": "MIN_PROFIT_AFTER_FEES_PCT",
-        "label": "Ganancia mínima post-fees para vender",
+        "label": "Ganancia mínima post-fees para SELL final",
         "type": "percent",
         "default": 0.004,
         "min": 0.1, "max": 5, "step": 0.05,
         "description": (
-            "Bloquea SELL si el ROI no supera este umbral (cubre fees ~0.2% + "
-            "margen). Stop-loss se ejecuta ignorando esta regla."
+            "Bloquea SELL completo si el ROI no supera este umbral (cubre "
+            "fees ~0.2% + margen). Stop-loss se ejecuta ignorando esta regla. "
+            "PARTIAL_SELL usa el threshold más laxo MIN_PROFIT_SCALED_EXIT_PCT."
+        ),
+        "category": "risk",
+        "restart_required": True,
+    },
+    {
+        "key": "MIN_PROFIT_SCALED_EXIT_PCT",
+        "label": "Ganancia mínima para PARTIAL_SELL (scaled exit)",
+        "type": "percent",
+        "default": 0.002,
+        "min": 0, "max": 2, "step": 0.05,
+        "description": (
+            "Threshold más laxo para ventas parciales (sell_pct < 1.0). "
+            "Permite hacer lock-in parcial temprano para reducir riesgo, mientras "
+            "el SELL final aún requiere MIN_PROFIT_AFTER_FEES_PCT para cubrir fees."
         ),
         "category": "risk",
         "restart_required": True,
@@ -290,6 +305,61 @@ PARAMETER_CATALOG: List[ParamDef] = [
             "Caída desde entrada para DCA nivel 2 (legacy)."
         ),
         "category": "dca",
+        "restart_required": True,
+    },
+
+    # ── Salidas ALCISTA (trailing + scaled exits) ───────────────────────────
+    {
+        "key": "TRAILING_STOP_ALCISTA_PCT",
+        "label": "Trailing stop ALCISTA — caída desde peak",
+        "type": "percent",
+        "default": 0.007,
+        "min": 0.2, "max": 3, "step": 0.05,
+        "description": (
+            "En régimen ALCISTA, vende la posición si el precio cae más de "
+            "este % desde su pico. Más alto = filtra mejor el ruido, captura "
+            "más rally; más bajo = lock-in más rápido, menor ganancia."
+        ),
+        "category": "exits_alcista",
+        "restart_required": True,
+    },
+    {
+        "key": "TRAILING_MIN_EXIT_ROI_ALCISTA_PCT",
+        "label": "ROI mínimo para activar trailing exit ALCISTA",
+        "type": "percent",
+        "default": 0.007,
+        "min": 0.2, "max": 3, "step": 0.05,
+        "description": (
+            "El trailing stop solo ejecuta si el ROI total ya alcanzó este "
+            "umbral, evitando vender en pérdida por trailing prematuro."
+        ),
+        "category": "exits_alcista",
+        "restart_required": True,
+    },
+    {
+        "key": "SCALED_EXIT_ALCISTA_ROI_PCT",
+        "label": "Scaled exit intermedio ALCISTA — ROI gatillo",
+        "type": "percent",
+        "default": 0.015,
+        "min": 0.5, "max": 10, "step": 0.05,
+        "description": (
+            "Al alcanzar este ROI, vende una fracción de la posición (lock-in "
+            "parcial). El resto queda para el trailing stop. Default 1.5%."
+        ),
+        "category": "exits_alcista",
+        "restart_required": True,
+    },
+    {
+        "key": "SCALED_EXIT_ALCISTA_SELL_PCT",
+        "label": "Scaled exit intermedio ALCISTA — fracción a vender",
+        "type": "percent",
+        "default": 0.25,
+        "min": 5, "max": 80, "step": 5,
+        "description": (
+            "Porcentaje de la posición a vender cuando se dispara el scaled "
+            "exit intermedio. Default 25% (deja 75% para el rally completo)."
+        ),
+        "category": "exits_alcista",
         "restart_required": True,
     },
 
@@ -561,6 +631,7 @@ CATEGORIES = [
     {"id": "capital", "label": "Capital y posiciones", "icon": "💰"},
     {"id": "risk", "label": "Gestión de riesgo", "icon": "🛡️"},
     {"id": "dca", "label": "DCA", "icon": "📉"},
+    {"id": "exits_alcista", "label": "Salidas ALCISTA", "icon": "🎢"},
     {"id": "filters", "label": "Filtros de entrada", "icon": "🎯"},
     {"id": "regime", "label": "Detección de régimen", "icon": "📊"},
     {"id": "agent", "label": "Agente IA", "icon": "🧠"},

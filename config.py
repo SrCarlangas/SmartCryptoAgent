@@ -59,6 +59,7 @@ MIN_USDT_RESERVE_PCT = _p('MIN_USDT_RESERVE_PCT', 0.30, float)      # mantener 3
 MAX_PORTFOLIO_EXPOSURE = _p('MAX_PORTFOLIO_EXPOSURE', 0.70, float)  # 70% max (derivado de 30% reserva)
 DCA_BASE_UNIT_PCT = _p('DCA_BASE_UNIT_PCT', 0.03, float)            # unidad base DCA: 2-5% del capital
 MIN_PROFIT_AFTER_FEES_PCT = _p('MIN_PROFIT_AFTER_FEES_PCT', 0.004, float)
+MIN_PROFIT_SCALED_EXIT_PCT = _p('MIN_PROFIT_SCALED_EXIT_PCT', 0.002, float)  # threshold más laxo para PARTIAL_SELL
 MAX_DCA_LEVELS = _p('MAX_DCA_LEVELS', 5, int)                       # maximo niveles DCA por posicion
 
 # Capital
@@ -97,8 +98,8 @@ REGIME_PARAMS = {
         "fib_entry_high": 0.5,
         "tp_fib_extension": 1.618,
         "tp_pct": 0.010,             # Activar trailing stop desde 1.0% ROI
-        "trailing_stop_pct": 0.005,  # Vender si cae 0.5% desde el pico
-        "trailing_min_exit_roi": 0.007,  # Minimo 0.7% ROI al ejecutar trailing sell
+        "trailing_stop_pct": _p('TRAILING_STOP_ALCISTA_PCT', 0.007, float),  # Fase 2: 0.5%→0.7% (filtra ruido)
+        "trailing_min_exit_roi": _p('TRAILING_MIN_EXIT_ROI_ALCISTA_PCT', 0.007, float),  # Minimo ROI al ejecutar trailing sell
         "min_rr": 2.5,
         "sl_pct": 0.08,
         "position_size_factor": 1.5, # posiciones ~15% del capital
@@ -107,8 +108,11 @@ REGIME_PARAMS = {
         "min_reserve": 0.30,         # 30% reserva
         "dca_table": [(40, 2.0), (50, 0.5), (65, 0.0)],
         "partial_sell_rsi75": 0.15,  # vender 15% solo cuando RSI>75
+        # Fase 2: scaled exit intermedio +1.5%@25% (lock-in parcial sin renunciar al rally)
+        # Antes era roi_pct=0.30 que nunca disparaba (dead code).
         "scaled_exits": [
-            {"trigger": "roi_pct", "value": 0.30, "sell_pct": 0.25},
+            {"trigger": "roi_pct", "value": _p('SCALED_EXIT_ALCISTA_ROI_PCT', 0.015, float),
+             "sell_pct": _p('SCALED_EXIT_ALCISTA_SELL_PCT', 0.25, float)},
             {"trigger": "weekly_rsi_gt", "value": 75, "sell_pct": 0.25},
             {"trigger": "resistance", "value": None, "sell_pct": 0.25},
         ],

@@ -6,8 +6,19 @@ from modules.logger import logger
 from config import (
     AGENT_MODE, AGENT_MIN_CONFIDENCE,
     REGIME_PARAMS, DCA_BASE_UNIT_PCT, HARD_STOP_LOSS_PCT,
-    MIN_PROFIT_AFTER_FEES_PCT,
+    MIN_PROFIT_AFTER_FEES_PCT, MIN_PROFIT_SCALED_EXIT_PCT,
 )
+
+
+def _min_profit_threshold(sell_pct: float) -> float:
+    """Devuelve el umbral mínimo de ROI para permitir una venta.
+    PARTIAL_SELL (sell_pct < 1.0) usa un threshold más laxo porque la idea
+    es lock-in parcial; el SELL final mantiene MIN_PROFIT_AFTER_FEES_PCT
+    para cubrir fees de round-trip.
+    """
+    if sell_pct is not None and 0 < sell_pct < 1.0:
+        return MIN_PROFIT_SCALED_EXIT_PCT
+    return MIN_PROFIT_AFTER_FEES_PCT
 
 
 class AgentOrchestrator:
@@ -136,16 +147,18 @@ class AgentOrchestrator:
                     )
                     return self._decision_to_plan(rules_decision, ctx)
 
-            # Bloquear SELL con ROI < MIN_PROFIT (excepto stop-loss)
+            # Bloquear SELL/PARTIAL_SELL con ROI < MIN_PROFIT (excepto stop-loss).
+            # Fase 2: PARTIAL_SELL usa threshold más laxo (MIN_PROFIT_SCALED_EXIT_PCT).
             if agent_decision.action in ("SELL", "PARTIAL_SELL"):
                 pos = self.risk_manager._find_position(ctx, agent_decision.target_position_id)
-                if pos and pos.roi_current < MIN_PROFIT_AFTER_FEES_PCT:
+                threshold = _min_profit_threshold(agent_decision.sell_pct)
+                if pos and pos.roi_current < threshold:
                     regime_cfg = REGIME_PARAMS.get(ctx.regime, REGIME_PARAMS.get("LATERAL", {}))
                     sl_pct = regime_cfg.get("sl_pct", 0.08)
                     if pos.roi_current > -sl_pct and pos.roi_current > -HARD_STOP_LOSS_PCT:
                         logger.info(
-                            f"⏸️ SELL bloqueado: ROI {pos.roi_current*100:.2f}% "
-                            f"< min {MIN_PROFIT_AFTER_FEES_PCT*100:.1f}% "
+                            f"⏸️ {agent_decision.action} bloqueado: ROI {pos.roi_current*100:.2f}% "
+                            f"< min {threshold*100:.2f}% "
                             f"[{agent_decision.target_position_id}]"
                         )
                         return self._decision_to_plan(rules_decision, ctx)
@@ -181,16 +194,18 @@ class AgentOrchestrator:
                     return plan
                 return self._decision_to_plan(rules_decision, ctx)
 
-            # Bloquear SELL con ROI < MIN_PROFIT (excepto stop-loss)
+            # Bloquear SELL/PARTIAL_SELL con ROI < MIN_PROFIT (excepto stop-loss).
+            # Fase 2: PARTIAL_SELL usa threshold más laxo (MIN_PROFIT_SCALED_EXIT_PCT).
             if agent_decision.action in ("SELL", "PARTIAL_SELL"):
                 pos = self.risk_manager._find_position(ctx, agent_decision.target_position_id)
-                if pos and pos.roi_current < MIN_PROFIT_AFTER_FEES_PCT:
+                threshold = _min_profit_threshold(agent_decision.sell_pct)
+                if pos and pos.roi_current < threshold:
                     regime_cfg = REGIME_PARAMS.get(ctx.regime, REGIME_PARAMS.get("LATERAL", {}))
                     sl_pct = regime_cfg.get("sl_pct", 0.08)
                     if pos.roi_current > -sl_pct and pos.roi_current > -HARD_STOP_LOSS_PCT:
                         logger.info(
-                            f"⏸️ SELL bloqueado: ROI {pos.roi_current*100:.2f}% "
-                            f"< min {MIN_PROFIT_AFTER_FEES_PCT*100:.1f}%"
+                            f"⏸️ {agent_decision.action} bloqueado: ROI {pos.roi_current*100:.2f}% "
+                            f"< min {threshold*100:.2f}%"
                         )
                         return self._decision_to_plan(rules_decision, ctx)
 
@@ -259,11 +274,13 @@ class AgentOrchestrator:
             )
             if exits:
                 trigger_name, sell_pct = exits[0]  # una a la vez
-                # No vender si ganancia no cubre fees (excepto SL ya evaluados arriba)
-                if p.roi_current < MIN_PROFIT_AFTER_FEES_PCT:
+                # Fase 2: scaled exits usan threshold más laxo cuando es parcial.
+                # No vender si ganancia no cubre el threshold (excepto SL ya evaluados arriba).
+                threshold = _min_profit_threshold(sell_pct)
+                if p.roi_current < threshold:
                     logger.info(
                         f"⏸️ Exit {trigger_name} bloqueado: ROI {p.roi_current*100:.2f}% "
-                        f"< min {MIN_PROFIT_AFTER_FEES_PCT*100:.1f}% [{p.id}]"
+                        f"< min {threshold*100:.2f}% [{p.id}]"
                     )
                     continue
                 if sell_pct >= 1.0:
