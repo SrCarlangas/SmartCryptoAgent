@@ -440,6 +440,47 @@ class AgentOrchestrator:
             if ctx.price > 0:
                 plan.quantity = plan.capital / ctx.price
 
+        return self._maybe_block_for_instruction(plan)
+
+    def _maybe_block_for_instruction(self, plan: ExecutionPlan) -> ExecutionPlan:
+        """Si hay una instrucción activa esperando una acción del mismo grupo
+        que `plan.action`, convierte el plan a HOLD. Centralizado para que
+        TODAS las rutas (rules, agent shadow/primary/full) pasen por aquí.
+
+        Excepciones que pasan sin bloqueo:
+        - plan.action == HOLD (no aplica)
+        - plan.source == 'hard_limit' (HARD_STOP_LOSS de main.py)
+        - reasoning contiene "HARD SL" (HARD_STOP_LOSS detectado en rules)
+        - SL por régimen (reasoning empieza con "SL ") — safety prevalece
+        """
+        if plan.action == "HOLD":
+            return plan
+        reasoning = (plan.reasoning or "")
+        reasoning_lower = reasoning.lower()
+        if plan.source == "hard_limit":
+            return plan
+        if "hard sl" in reasoning_lower or "hard_sl" in reasoning_lower:
+            return plan
+        # SL por régimen (reasoning empieza con "SL ALCISTA", "SL BAJISTA", etc.)
+        if reasoning.startswith("SL ") and ":" in reasoning:
+            return plan
+
+        try:
+            from modules.instructions.executor import InstructionExecutor
+            blocked, reason = InstructionExecutor.get_singleton().should_block_action(
+                plan.action, plan.source
+            )
+            if blocked:
+                logger.info(
+                    f"🔒 {plan.action} bloqueado: {reason} | era: {reasoning[:80]}"
+                )
+                new_plan = ExecutionPlan()
+                new_plan.action = "HOLD"
+                new_plan.source = "blocked_by_instruction"
+                new_plan.reasoning = f"🔒 {plan.action} bloqueado: {reason}"
+                return new_plan
+        except Exception as e:
+            logger.warning(f"⚠️ _maybe_block_for_instruction: {e}")
         return plan
 
     def _default_reasoning(self, decision: TradingDecision, ctx: MarketContext) -> str:

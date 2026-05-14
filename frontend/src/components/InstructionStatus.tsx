@@ -10,14 +10,45 @@ export function InstructionStatus({ instruction, onCancel }: Props) {
   const i = instruction;
   const created = new Date(i.created_at * 1000).toLocaleString();
 
+  // Una instrucción que aún no se ha disparado bloquea acciones del mismo grupo
+  // del flujo normal del bot. Mostramos un badge claro para que el usuario
+  // entienda qué está ocurriendo entre la creación y el trigger.
+  const sellTypes = ["SELL", "PARTIAL_SELL"];
+  const buyTypes = ["BUY", "DCA"];
+  const pendingType = i.entry_action?.type;
+  const isWaiting = !i.entered && pendingType;
+  const blocksGroup = isWaiting
+    ? sellTypes.includes(pendingType)
+      ? "SELL"
+      : buyTypes.includes(pendingType)
+        ? "BUY"
+        : null
+    : null;
+
   return (
     <div className="bg-gradient-to-r from-orange-950/40 to-amber-950/40 border border-orange-700/40 rounded-lg p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <span className="text-xs uppercase tracking-wider px-2 py-0.5 rounded bg-orange-500/20 text-orange-300 border border-orange-500/30">
               {i.status}
             </span>
+            {blocksGroup === "SELL" && (
+              <span
+                title="Mientras espera el trigger, el bot NO ejecuta SELL ni PARTIAL_SELL del flujo normal (TP, trailing, scaled exits). HARD_STOP_LOSS y SL por régimen siguen activos."
+                className="text-xs px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40"
+              >
+                🔒 Bloqueando SELL / PARTIAL_SELL del flujo normal
+              </span>
+            )}
+            {blocksGroup === "BUY" && (
+              <span
+                title="Mientras espera el trigger, el bot NO ejecuta BUY ni DCA del flujo normal. Puede seguir vendiendo posiciones existentes con TP/trailing."
+                className="text-xs px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/40"
+              >
+                🔒 Bloqueando BUY / DCA del flujo normal
+              </span>
+            )}
             <span className="text-xs text-slate-400">{created}</span>
           </div>
           <div className="mt-2 text-base text-slate-100">«{i.raw_text}»</div>

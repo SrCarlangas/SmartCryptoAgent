@@ -161,6 +161,72 @@ class InstructionExecutor:
 
         return plan
 
+    # ──────────────────────── BLOQUEO DE FLUJO NORMAL ──────────────────────
+    # Cuando hay una instrucción activa esperando que se cumpla su trigger,
+    # el bot NO debe ejecutar acciones del mismo "lado" (compra/venta) del
+    # flujo normal. Esto refleja la intención del usuario: si dijo "vende
+    # cuando supere $X", está esperando ESE momento; no quiere que el bot
+    # venda antes con TP/trailing/scaled exit.
+    #
+    # Excepciones intencionales:
+    # - HARD_STOP_LOSS (corre en main._check_hard_limits ANTES del orchestrator).
+    # - SL por régimen: se mantiene activo por safety; si la posición cae
+    #   abruptamente, mejor cerrar que mantenerla por la instrucción.
+
+    def should_block_action(self, action: str, source: str = "") -> tuple:
+        """Retorna (blocked: bool, reason: str) según si hay una instrucción
+        activa esperando una acción del mismo grupo que `action`.
+
+        Reglas:
+        - Si entry_action.type ∈ {SELL, PARTIAL_SELL} y entered=False
+          → bloquea SELL y PARTIAL_SELL del flujo normal.
+        - Si entry_action.type ∈ {BUY, DCA} y entered=False
+          → bloquea BUY y DCA del flujo normal.
+        - HARD_STOP_LOSS (source='hard_limit') nunca se bloquea.
+        - SL por régimen (source contains 'SL'): por defecto NO se bloquea
+          (decisión conservadora para evitar pérdidas mayores).
+        """
+        # Excepciones que NO se bloquean
+        if source == "hard_limit":
+            return False, ""
+
+        inst = self.store.get_active()
+        if not inst or inst.entered or not inst.entry_action:
+            return False, ""
+
+        sell_actions = {"SELL", "PARTIAL_SELL"}
+        buy_actions = {"BUY", "DCA"}
+        pending_type = inst.entry_action.type
+        pending_group = sell_actions if pending_type in sell_actions else (
+            buy_actions if pending_type in buy_actions else set()
+        )
+
+        if action in pending_group:
+            return True, (
+                f"esperando trigger de instrucción «{inst.raw_text[:60]}»"
+            )
+        return False, ""
+
+    def has_blocking_instruction(self) -> dict:
+        """Info ligera para el frontend: ¿hay instrucción activa bloqueando?
+
+        Retorna dict con: {active: bool, action_type: str, raw_text: str}
+        o {active: False} si no hay nada esperando.
+        """
+        inst = self.store.get_active()
+        if not inst or inst.entered or not inst.entry_action:
+            return {"active": False}
+        sell_actions = {"SELL", "PARTIAL_SELL"}
+        pending_type = inst.entry_action.type
+        group = "SELL" if pending_type in sell_actions else "BUY"
+        return {
+            "active": True,
+            "blocks_group": group,
+            "instruction_id": inst.id,
+            "raw_text": inst.raw_text,
+            "pending_action": pending_type,
+        }
+
     def validate_against_state(self, inst: Instruction) -> List[str]:
         """Pre-flight check: detecta cantidades imposibles, posiciones inexistentes, etc."""
         warnings = []
